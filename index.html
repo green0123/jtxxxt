@@ -1731,7 +1731,8 @@
           activeBtn.classList.remove('border-transparent');
         }
 
-        document.querySelectorAll('.tab-content').forEach(content => {
+        // 只隐藏当前模块的 tab-content，而不是所有模块的
+        document.querySelectorAll(`[id^="${contentPrefix}-"][id$="-tab-content"]`).forEach(content => {
           content.classList.add('hidden');
         });
         
@@ -4852,9 +4853,13 @@
         
         // 底部导航栏已移除，相关代码已清理
         
-        // 显示对应内容
+        // 只隐藏财务模块的 tab-content（排除其他模块的）
         document.querySelectorAll('.tab-content').forEach(content => {
-          content.classList.add('hidden');
+          const contentId = content.id;
+          // 只隐藏财务模块的 tab-content（不包含 study-, housework-, task- 前缀的）
+          if (!contentId.startsWith('study-') && !contentId.startsWith('housework-') && !contentId.startsWith('task-')) {
+            content.classList.add('hidden');
+          }
         });
         
         document.getElementById(`${tabId}-tab-content`).classList.remove('hidden');
