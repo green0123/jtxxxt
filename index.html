@@ -5685,21 +5685,235 @@
           <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6">
             <div class="flex justify-between items-center mb-3 sm:mb-4">
               <h3 class="text-base sm:text-lg font-semibold text-gray-800">学习时间趋势</h3>
-              <div class="flex space-x-1 sm:space-x-2">
-                <button class="time-filter-study px-2 sm:px-3 py-1 rounded-md text-xs font-medium bg-indigo-600 text-white" data-period="7">7天</button>
-                <button class="time-filter-study px-2 sm:px-3 py-1 rounded-md text-xs font-medium bg-gray-200 text-gray-700" data-period="30">30天</button>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full" id="studyTimeSummary">本周 0 分钟</span>
+                <div class="flex space-x-1 sm:space-x-2">
+                  <button class="time-filter-study px-2 sm:px-3 py-1 rounded-md text-xs font-medium bg-indigo-600 text-white transition-all duration-200" data-period="7">7天</button>
+                  <button class="time-filter-study px-2 sm:px-3 py-1 rounded-md text-xs font-medium bg-gray-200 text-gray-700 hover:bg-gray-300 transition-all duration-200" data-period="30">30天</button>
+                </div>
               </div>
             </div>
-            <div class="h-56 sm:h-64">
+            <div class="h-56 sm:h-64 relative">
               <canvas id="studyTimeChart"></canvas>
+            </div>
+            <!-- 学习统计概览 -->
+            <div class="mt-4 grid grid-cols-3 gap-3" id="studyTimeStats">
+              <div class="text-center p-2 bg-indigo-50 rounded-lg">
+                <div class="text-lg font-bold text-indigo-600" id="studyTimeTotal">0</div>
+                <div class="text-xs text-gray-500">总时长(分钟)</div>
+              </div>
+              <div class="text-center p-2 bg-emerald-50 rounded-lg">
+                <div class="text-lg font-bold text-emerald-600" id="studyTimeAvg">0</div>
+                <div class="text-xs text-gray-500">日均(分钟)</div>
+              </div>
+              <div class="text-center p-2 bg-amber-50 rounded-lg">
+                <div class="text-lg font-bold text-amber-600" id="studyTimeMax">0</div>
+                <div class="text-xs text-gray-500">最高(分钟)</div>
+              </div>
+            </div>
+            
+            <!-- 学习时段分布 -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-medium text-gray-600 flex items-center">
+                  <i class="fa fa-clock-o mr-1.5 text-indigo-500"></i>学习时段分布
+                </h4>
+                <span class="text-xs text-gray-400" id="timeDistributionHint">基于最近7天数据</span>
+              </div>
+              <div class="grid grid-cols-4 gap-2" id="timeDistribution">
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-orange-50 to-orange-100 border border-orange-200">
+                  <div class="text-xs text-orange-600 mb-1">🌅 早晨</div>
+                  <div class="text-sm font-bold text-orange-700" id="morningTime">0</div>
+                  <div class="text-xs text-orange-500">分钟</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-blue-50 to-blue-100 border border-blue-200">
+                  <div class="text-xs text-blue-600 mb-1">☀️ 上午</div>
+                  <div class="text-sm font-bold text-blue-700" id="forenoonTime">0</div>
+                  <div class="text-xs text-blue-500">分钟</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-amber-50 to-amber-100 border border-amber-200">
+                  <div class="text-xs text-amber-600 mb-1">🌤️ 下午</div>
+                  <div class="text-sm font-bold text-amber-700" id="afternoonTime">0</div>
+                  <div class="text-xs text-amber-500">分钟</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-indigo-50 to-indigo-100 border border-indigo-200">
+                  <div class="text-xs text-indigo-600 mb-1">🌙 晚上</div>
+                  <div class="text-sm font-bold text-indigo-700" id="eveningTime">0</div>
+                  <div class="text-xs text-indigo-500">分钟</div>
+                </div>
+              </div>
+              <!-- 时段进度条 -->
+              <div class="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden flex" id="timeDistributionBar">
+                <div class="h-full bg-orange-400 transition-all duration-500" id="morningBar" style="width: 25%"></div>
+                <div class="h-full bg-blue-400 transition-all duration-500" id="forenoonBar" style="width: 25%"></div>
+                <div class="h-full bg-amber-400 transition-all duration-500" id="afternoonBar" style="width: 25%"></div>
+                <div class="h-full bg-indigo-400 transition-all duration-500" id="eveningBar" style="width: 25%"></div>
+              </div>
+            </div>
+            
+            <!-- 学习打卡与目标 -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+              <div class="grid grid-cols-2 gap-3">
+                <!-- 连续打卡 -->
+                <div class="p-3 rounded-xl bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-rose-600 flex items-center">
+                      <i class="fa fa-fire mr-1.5"></i>连续打卡
+                    </span>
+                    <span class="text-xs text-rose-400" id="streakHint">本周</span>
+                  </div>
+                  <div class="flex items-end gap-1">
+                    <span class="text-2xl font-bold text-rose-600" id="studyStreak">0</span>
+                    <span class="text-xs text-rose-500 mb-1">天</span>
+                  </div>
+                  <div class="mt-2 flex gap-1" id="streakDots">
+                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
+                  </div>
+                </div>
+                
+                <!-- 学习目标 -->
+                <div class="p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-emerald-600 flex items-center">
+                      <i class="fa fa-bullseye mr-1.5"></i>目标进度
+                    </span>
+                    <span class="text-xs text-emerald-400" id="goalHint">周目标</span>
+                  </div>
+                  <div class="flex items-end gap-1">
+                    <span class="text-2xl font-bold text-emerald-600" id="goalProgress">0</span>
+                    <span class="text-xs text-emerald-500 mb-1">%</span>
+                  </div>
+                  <div class="mt-2">
+                    <div class="h-2 bg-emerald-200 rounded-full overflow-hidden">
+                      <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" id="goalProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="mt-1 flex justify-between text-xs text-emerald-600">
+                      <span id="currentGoalText">0/420分钟</span>
+                      <span id="goalStatus">未达标</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 学习效率分析 -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-medium text-gray-600 flex items-center">
+                  <i class="fa fa-line-chart mr-1.5 text-purple-500"></i>学习效率分析
+                </h4>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600" id="efficiencyTag">良好</span>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-center">
+                <div class="p-2 rounded-lg bg-purple-50">
+                  <div class="text-xs text-purple-500 mb-1">学习天数</div>
+                  <div class="text-lg font-bold text-purple-700" id="studyDays">0</div>
+                  <div class="text-xs text-purple-400">天</div>
+                </div>
+                <div class="p-2 rounded-lg bg-purple-50">
+                  <div class="text-xs text-purple-500 mb-1">单次平均</div>
+                  <div class="text-lg font-bold text-purple-700" id="avgSession">0</div>
+                  <div class="text-xs text-purple-400">分钟</div>
+                </div>
+                <div class="p-2 rounded-lg bg-purple-50">
+                  <div class="text-xs text-purple-500 mb-1">专注指数</div>
+                  <div class="text-lg font-bold text-purple-700" id="focusIndex">--</div>
+                  <div class="text-xs text-purple-400">分</div>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- 课程进度 -->
           <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6">
-            <h3 class="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">课程进度</h3>
-            <div class="h-56 sm:h-64">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-base sm:text-lg font-semibold text-gray-800">课程进度</h3>
+              <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full" id="courseProgressSummary">0 门进行中</span>
+            </div>
+            <div class="h-56 sm:h-64 relative">
               <canvas id="courseProgressChart"></canvas>
+              <!-- 中心总进度 -->
+              <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span class="text-3xl font-bold text-gray-800" id="overallProgress">0%</span>
+                <span class="text-xs text-gray-500">总体进度</span>
+              </div>
+            </div>
+            <!-- 课程详情列表 -->
+            <div class="mt-4 space-y-3 max-h-48 overflow-y-auto" id="courseProgressDetails">
+              <!-- 动态生成 -->
+            </div>
+            
+            <!-- 课程统计概览 -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-medium text-gray-600 flex items-center">
+                  <i class="fa fa-pie-chart mr-1.5 text-indigo-500"></i>课程统计概览
+                </h4>
+              </div>
+              <div class="grid grid-cols-4 gap-2" id="courseStatsOverview">
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-indigo-50 to-indigo-100 border border-indigo-200">
+                  <div class="text-xs text-indigo-600 mb-1">总课程</div>
+                  <div class="text-sm font-bold text-indigo-700" id="totalCourses">0</div>
+                  <div class="text-xs text-indigo-500">门</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-emerald-50 to-emerald-100 border border-emerald-200">
+                  <div class="text-xs text-emerald-600 mb-1">已完成</div>
+                  <div class="text-sm font-bold text-emerald-700" id="completedCourses">0</div>
+                  <div class="text-xs text-emerald-500">门</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-amber-50 to-amber-100 border border-amber-200">
+                  <div class="text-xs text-amber-600 mb-1">进行中</div>
+                  <div class="text-sm font-bold text-amber-700" id="activeCourses">0</div>
+                  <div class="text-xs text-amber-500">门</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-purple-50 to-purple-100 border border-purple-200">
+                  <div class="text-xs text-purple-600 mb-1">总课时</div>
+                  <div class="text-sm font-bold text-purple-700" id="totalLessons">0</div>
+                  <div class="text-xs text-purple-500">小时</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 最近学习课程 -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-medium text-gray-600 flex items-center">
+                  <i class="fa fa-history mr-1.5 text-amber-500"></i>最近学习
+                </h4>
+                <span class="text-xs text-gray-400" id="lastStudyTime">暂无记录</span>
+              </div>
+              <div id="recentCourseList" class="space-y-2">
+                <div class="text-center py-3 text-gray-400 text-xs">
+                  <i class="fa fa-book mr-1"></i>暂无学习记录
+                </div>
+              </div>
+            </div>
+            
+            <!-- 学习建议 -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-medium text-gray-600 flex items-center">
+                  <i class="fa fa-lightbulb-o mr-1.5 text-yellow-500"></i>学习建议
+                </h4>
+              </div>
+              <div class="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200">
+                <div class="flex items-start gap-2">
+                  <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                    <i class="fa fa-star text-amber-500 text-sm"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-gray-700 leading-relaxed" id="studySuggestion">
+                      开始添加课程并记录学习进度，让学习更有计划性！
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -5982,7 +6196,7 @@
                 <i class="fa fa-exclamation-triangle text-red-600 text-lg sm:text-xl"></i>
               </div>
               <div>
-                <p class="text-xs sm:text-sm text-gray-500">逾期任务</p>
+                <p class="text-xs sm:text-sm text-gray-500">逾期家务</p>
                 <p class="text-lg sm:text-2xl font-bold text-gray-800" id="taskOverdueCount">0项</p>
               </div>
             </div>
@@ -6193,6 +6407,11 @@
           <li class="mr-2" role="presentation">
             <button class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg" id="housework-completed-tab" data-tab="completed" type="button" role="tab" aria-selected="false">
               <i class="fa fa-check-circle mr-1"></i> 已完成
+            </button>
+          </li>
+          <li class="mr-2" role="presentation">
+            <button class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg" id="housework-overdue-tab" data-tab="overdue" type="button" role="tab" aria-selected="false">
+              <i class="fa fa-exclamation-triangle mr-1"></i> 逾期家务
             </button>
           </li>
           <li role="presentation">
@@ -6450,6 +6669,61 @@
         </div>
       </div>
 
+      <!-- 逾期家务 -->
+      <div id="housework-overdue-tab-content" class="tab-content hidden animate-fade-in">
+        <div class="mb-6 flex justify-between items-center">
+          <h3 class="text-xl font-semibold text-gray-800">逾期家务</h3>
+          <span class="text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full" id="overdueCountBadge">0 项逾期</span>
+        </div>
+
+        <!-- 逾期家务提示 -->
+        <div class="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl p-4 mb-6">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3">
+              <i class="fa fa-exclamation-triangle text-red-500"></i>
+            </div>
+            <div class="flex-1">
+              <p class="text-sm text-red-700 font-medium">以下家务已逾期，请尽快处理！</p>
+              <p class="text-xs text-red-500 mt-1">逾期家务会影响家务完成率统计</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 筛选和搜索栏 -->
+        <div class="bg-white rounded-xl shadow-lg p-4 mb-6">
+          <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1">
+              <input type="text" id="overdueHouseworkSearchInput" placeholder="搜索逾期家务..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            </div>
+            <div class="flex gap-2">
+              <select id="overdueHouseworkFilterPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <option value="all">全部优先级</option>
+                <option value="high">高优先级</option>
+                <option value="medium">中优先级</option>
+                <option value="low">低优先级</option>
+              </select>
+              <select id="overdueHouseworkFilterType" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <option value="all">全部类型</option>
+                <option value="cleaning">清洁</option>
+                <option value="cooking">烹饪</option>
+                <option value="laundry">洗衣</option>
+                <option value="shopping">购物</option>
+                <option value="other">其他</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 逾期家务列表 -->
+        <div id="overdueHouseworkContainer" class="space-y-4">
+          <div class="text-center py-12 text-gray-500">
+            <i class="fa fa-calendar-check text-5xl mb-4 text-gray-300"></i>
+            <p class="text-lg">暂无逾期家务</p>
+            <p class="text-sm text-gray-400 mt-2">太棒了！您的家务都在按时完成</p>
+          </div>
+        </div>
+      </div>
+
       <!-- 统计分析 -->
       <div id="housework-statistics-tab-content" class="tab-content hidden animate-fade-in">
         <div class="mb-6">
@@ -6665,6 +6939,13 @@
             本月学习目标 *
           </label>
           <textarea id="monthlyPlanGoal" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 whitespace-pre-wrap" rows="8" placeholder="请输入本月的学习目标，每行一条..."></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-medium mb-2">
+            本月目标学习时长（小时） *
+          </label>
+          <input type="number" id="monthlyPlanTargetHours" min="0" step="0.5" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="请输入本月目标学习时长（小时）">
         </div>
         <div class="flex justify-end space-x-3">
           <button type="button" onclick="closeModal('monthlyPlanModal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md">取消</button>
@@ -7232,6 +7513,7 @@
           const course = studyData.courses.find(c => c.id === selectedCourseId);
           if (course) {
             const goalTextarea = document.getElementById('monthlyPlanGoal');
+            const targetHoursInput = document.getElementById('monthlyPlanTargetHours');
             const currentGoal = goalTextarea.value;
             const courseGoal = `课程: ${course.name}\n总时长: ${course.totalLessons}小时\n目标: 完成课程的${Math.round(course.totalLessons * 0.25)}小时学习`;
             
@@ -7240,7 +7522,13 @@
             } else if (!currentGoal.includes(course.name)) {
               goalTextarea.value = currentGoal + '\n\n' + courseGoal;
             }
+            
+            // 自动填充目标学习时长为课程总时长的25%
+            targetHoursInput.value = Math.round(course.totalLessons * 0.25);
           }
+        } else {
+          // 清空目标学习时长
+          document.getElementById('monthlyPlanTargetHours').value = '';
         }
       };
 
@@ -7252,11 +7540,13 @@
           yearSelect.value = plan.year;
           monthSelect.value = plan.month;
           document.getElementById('monthlyPlanGoal').value = plan.goal;
+          document.getElementById('monthlyPlanTargetHours').value = plan.targetHours || '';
           courseSelect.value = plan.courseId || '';
         }
       } else {
         title.textContent = '添加月计划';
         document.getElementById('monthlyPlanId').value = '';
+        document.getElementById('monthlyPlanTargetHours').value = '';
       }
 
       modal.classList.remove('hidden');
@@ -7283,6 +7573,7 @@
         year: year,
         month: month,
         goal: document.getElementById('monthlyPlanGoal').value,
+        targetHours: parseFloat(document.getElementById('monthlyPlanTargetHours').value),
         courseId: document.getElementById('monthlyPlanCourse').value || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -7358,6 +7649,18 @@
           }
         }
 
+        // 计算该月的学习时长
+        const monthStart = new Date(plan.year, plan.month - 1, 1);
+        const monthEnd = new Date(plan.year, plan.month, 0);
+        monthEnd.setDate(monthEnd.getDate() + 1); // 包含最后一天
+        
+        const monthlyRecords = studyData.records.filter(r => {
+          const recordDate = new Date(r.date);
+          return recordDate >= monthStart && recordDate < monthEnd;
+        });
+        const actualHours = (monthlyRecords.reduce((sum, r) => sum + r.duration, 0) / 60).toFixed(1);
+        const progress = plan.targetHours > 0 ? Math.min(100, Math.round((actualHours / plan.targetHours) * 100)) : 0;
+
         const now = new Date();
         const isCurrentMonth = plan.year === now.getFullYear() && plan.month === now.getMonth() + 1;
 
@@ -7407,13 +7710,19 @@
               <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg leading-relaxed">${plan.goal}</div>
             </div>
 
+            <!-- 学习进度 -->
+            <div class="mb-4 flex items-center gap-2">
+              <span class="text-xs text-gray-500">学习进度:</span>
+              <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
+              </div>
+              <span class="text-xs font-medium text-blue-600">${actualHours}/${plan.targetHours}h</span>
+            </div>
+
             <!-- 操作按钮 -->
             <div class="flex gap-2">
               <button onclick="toggleMonthlyPlanComplete('${plan.id}')" class="px-3 py-1.5 text-xs ${plan.completed ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'} rounded-lg transition-all">
                 <i class="fa ${plan.completed ? 'fa-undo' : 'fa-check'} mr-1"></i>${plan.completed ? '取消完成' : '完成'}
-              </button>
-              <button onclick="openMonthlyPlanModal('${plan.id}')" class="px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all">
-                <i class="fa fa-edit mr-1"></i>编辑
               </button>
               <button onclick="deleteMonthlyPlan('${plan.id}')" class="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all">
                 <i class="fa fa-trash mr-1"></i>删除
@@ -7428,6 +7737,28 @@
     function toggleMonthlyPlanComplete(planId) {
       const plan = studyData.monthlyPlans.find(p => p.id === planId);
       if (plan) {
+        // 如果计划未完成，需要验证学习进度
+        if (!plan.completed) {
+          // 计算该月的学习时长
+          const monthStart = new Date(plan.year, plan.month - 1, 1);
+          const monthEnd = new Date(plan.year, plan.month, 0);
+          monthEnd.setDate(monthEnd.getDate() + 1); // 包含最后一天
+          
+          const monthlyRecords = studyData.records.filter(r => {
+            const recordDate = new Date(r.date);
+            return recordDate >= monthStart && recordDate < monthEnd;
+          });
+          const actualHours = (monthlyRecords.reduce((sum, r) => sum + r.duration, 0) / 60).toFixed(1);
+          const progress = plan.targetHours > 0 ? Math.min(100, Math.round((actualHours / plan.targetHours) * 100)) : 0;
+          
+          // 验证学习进度是否达到100%
+          if (progress < 100) {
+            alert(`学习进度未达到100%，当前进度为${progress}%，请继续完成学习目标。`);
+            return;
+          }
+        }
+        
+        // 如果是取消完成，或者进度已达到100%，则允许切换状态
         plan.completed = !plan.completed;
         plan.updatedAt = new Date().toISOString();
         saveStudyData();
@@ -7955,9 +8286,6 @@
               <button onclick="toggleWeeklyPlanComplete('${plan.id}')" class="px-3 py-1.5 text-xs ${plan.completed ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'} rounded-lg transition-all">
                 <i class="fa ${plan.completed ? 'fa-undo' : 'fa-check'} mr-1"></i>${plan.completed ? '取消完成' : '完成'}
               </button>
-              <button onclick="openWeeklyPlanModal('${plan.id}')" class="px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all">
-                <i class="fa fa-edit mr-1"></i>编辑
-              </button>
               <button onclick="deleteWeeklyPlan('${plan.id}')" class="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all">
                 <i class="fa fa-trash mr-1"></i>删除
               </button>
@@ -7970,6 +8298,60 @@
     function toggleWeeklyPlanComplete(planId) {
       const plan = studyData.weeklyPlans.find(p => p.id === planId);
       if (plan) {
+        // 如果计划未完成，需要验证学习进度
+        if (!plan.completed) {
+          // 计算学习进度
+          let dateRange;
+          const monthlyPlan = studyData.monthlyPlans.find(p => p.id === plan.monthId);
+          
+          if (monthlyPlan && plan.weekInMonth) {
+            const monthEnd = new Date(monthlyPlan.year, monthlyPlan.month, 0);
+            const totalDaysInMonth = monthEnd.getDate();
+            
+            let weekStart, weekEnd;
+            
+            if (plan.weekInMonth === 1) {
+              weekStart = new Date(monthlyPlan.year, monthlyPlan.month - 1, 1);
+              weekEnd = new Date(monthlyPlan.year, monthlyPlan.month - 1, 7);
+            } else if (plan.weekInMonth === 2) {
+              weekStart = new Date(monthlyPlan.year, monthlyPlan.month - 1, 8);
+              weekEnd = new Date(monthlyPlan.year, monthlyPlan.month - 1, 14);
+            } else if (plan.weekInMonth === 3) {
+              weekStart = new Date(monthlyPlan.year, monthlyPlan.month - 1, 15);
+              weekEnd = new Date(monthlyPlan.year, monthlyPlan.month - 1, 21);
+            } else if (plan.weekInMonth === 4) {
+              weekStart = new Date(monthlyPlan.year, monthlyPlan.month - 1, 22);
+              weekEnd = new Date(monthlyPlan.year, monthlyPlan.month - 1, totalDaysInMonth);
+            }
+            
+            dateRange = {
+              start: weekStart,
+              end: weekEnd
+            };
+          } else {
+            dateRange = getWeekDateRange(plan.year, plan.week);
+          }
+          
+          // 计算实际学习时长
+          const weekStart = dateRange.start;
+          const weekEnd = new Date(dateRange.end);
+          weekEnd.setDate(weekEnd.getDate() + 1);
+          
+          const weeklyRecords = studyData.records.filter(r => {
+            const recordDate = new Date(r.date);
+            return recordDate >= weekStart && recordDate < weekEnd;
+          });
+          const actualHours = (weeklyRecords.reduce((sum, r) => sum + r.duration, 0) / 60).toFixed(1);
+          const progress = plan.targetHours > 0 ? Math.min(100, Math.round((actualHours / plan.targetHours) * 100)) : 0;
+          
+          // 验证学习进度是否达到100%
+          if (progress < 100) {
+            alert(`学习进度未达到100%，当前进度为${progress}%，请继续完成学习目标。`);
+            return;
+          }
+        }
+        
+        // 如果是取消完成，或者进度已达到100%，则允许切换状态
         plan.completed = !plan.completed;
         plan.updatedAt = new Date().toISOString();
         saveStudyData();
@@ -8508,13 +8890,6 @@
                       <i class="fa ${colors.icon} mr-1"></i>
                       ${statusLabels[course.status]}
                     </span>
-                    ${relatedMonthlyPlans.length > 0 ? `
-                      <div class="mt-2 flex flex-wrap gap-2">
-                        <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                          <i class="fa fa-calendar-o mr-1"></i>${relatedMonthlyPlans.length}个计划
-                        </span>
-                      </div>
-                    ` : ''}
                   </div>
                 </div>
                 <div class="flex space-x-2">
@@ -8524,19 +8899,7 @@
                 </div>
               </div>
               <p class="text-gray-600 text-sm mb-4">${course.description || '暂无描述'}</p>
-              ${relatedMonthlyPlans.length > 0 ? `
-                <div class="mb-4">
-                  <h5 class="text-sm font-semibold text-gray-600 mb-2">关联学习计划:</h5>
-                  <div class="space-y-2">
-                    ${relatedMonthlyPlans.slice(0, 2).map(plan => `
-                      <div class="flex items-center text-xs text-gray-600">
-                        <i class="fa fa-calendar-o mr-2 text-purple-500"></i>
-                        <span>${plan.year}年${plan.month}月计划</span>
-                      </div>
-                    `).join('')}
-                  </div>
-                </div>
-              ` : ''}
+
               <div class="space-y-2">
                 <div class="flex justify-between text-sm text-gray-600">
                   <span>课时进度</span>
@@ -8781,6 +9144,11 @@
       // 初始化学习时间图表
       const studyTimeCtx = document.getElementById('studyTimeChart')?.getContext('2d');
       if (studyTimeCtx) {
+        // 创建渐变色
+        const gradient = studyTimeCtx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(79, 70, 229, 0.9)');
+        gradient.addColorStop(1, 'rgba(99, 102, 241, 0.4)');
+        
         studyTimeChart = new Chart(studyTimeCtx, {
           type: 'bar',
           data: {
@@ -8788,9 +9156,13 @@
             datasets: [{
               label: '学习时长（分钟）',
               data: [],
-              backgroundColor: 'rgba(79, 70, 229, 0.6)',
-              borderColor: 'rgba(79, 70, 229, 1)',
-              borderWidth: 1
+              backgroundColor: gradient,
+              borderColor: 'rgba(79, 70, 229, 0.8)',
+              borderWidth: 0,
+              borderRadius: 6,
+              borderSkipped: false,
+              barPercentage: 0.7,
+              categoryPercentage: 0.8
             }]
           },
           options: {
@@ -8799,12 +9171,69 @@
             plugins: {
               legend: {
                 display: false
+              },
+              tooltip: {
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                titleColor: '#1f2937',
+                bodyColor: '#4b5563',
+                borderColor: '#e5e7eb',
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 12,
+                displayColors: false,
+                callbacks: {
+                  label: function(context) {
+                    const minutes = context.parsed.y;
+                    const hours = Math.floor(minutes / 60);
+                    const mins = minutes % 60;
+                    if (hours > 0) {
+                      return `学习时长: ${hours}小时 ${mins}分钟`;
+                    }
+                    return `学习时长: ${mins}分钟`;
+                  }
+                }
               }
             },
             scales: {
+              x: {
+                grid: {
+                  display: false,
+                  drawBorder: false
+                },
+                ticks: {
+                  color: '#6b7280',
+                  font: {
+                    size: 11
+                  }
+                }
+              },
               y: {
-                beginAtZero: true
+                beginAtZero: true,
+                grid: {
+                  color: 'rgba(243, 244, 246, 0.8)',
+                  drawBorder: false
+                },
+                ticks: {
+                  color: '#6b7280',
+                  font: {
+                    size: 11
+                  },
+                  callback: function(value) {
+                    if (value >= 60) {
+                      return Math.floor(value / 60) + '小时';
+                    }
+                    return value + '分';
+                  }
+                }
               }
+            },
+            animation: {
+              duration: 800,
+              easing: 'easeOutQuart'
+            },
+            interaction: {
+              intersect: false,
+              mode: 'index'
             }
           }
         });
@@ -8815,31 +9244,79 @@
       const courseProgressCtx = document.getElementById('courseProgressChart')?.getContext('2d');
       if (courseProgressCtx) {
         const activeCourses = studyData.courses.filter(c => c.status === 'active');
+        const courseColors = [
+          { bg: 'rgba(79, 70, 229, 0.9)', border: '#4f46e5', gradient: ['#6366f1', '#4f46e5'] },
+          { bg: 'rgba(16, 185, 129, 0.9)', border: '#10b981', gradient: ['#34d399', '#10b981'] },
+          { bg: 'rgba(245, 158, 11, 0.9)', border: '#f59e0b', gradient: ['#fbbf24', '#f59e0b'] },
+          { bg: 'rgba(239, 68, 68, 0.9)', border: '#ef4444', gradient: ['#f87171', '#ef4444'] },
+          { bg: 'rgba(139, 92, 246, 0.9)', border: '#8b5cf6', gradient: ['#a78bfa', '#8b5cf6'] },
+          { bg: 'rgba(236, 72, 153, 0.9)', border: '#ec4899', gradient: ['#f472b6', '#ec4899'] },
+          { bg: 'rgba(14, 165, 233, 0.9)', border: '#0ea5e9', gradient: ['#38bdf8', '#0ea5e9'] },
+          { bg: 'rgba(249, 115, 22, 0.9)', border: '#f97316', gradient: ['#fb923c', '#f97316'] }
+        ];
+        
+        // 创建渐变色
+        const gradients = courseColors.map((color, index) => {
+          const gradient = courseProgressCtx.createLinearGradient(0, 0, 0, 200);
+          gradient.addColorStop(0, color.gradient[0]);
+          gradient.addColorStop(1, color.gradient[1]);
+          return gradient;
+        });
+        
         courseProgressChart = new Chart(courseProgressCtx, {
           type: 'doughnut',
           data: {
             labels: activeCourses.map(c => c.name),
             datasets: [{
               data: activeCourses.map(c => c.progress || 0),
-              backgroundColor: [
-                'rgba(79, 70, 229, 0.8)',
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(245, 158, 11, 0.8)',
-                'rgba(239, 68, 68, 0.8)',
-                'rgba(139, 92, 246, 0.8)'
-              ]
+              backgroundColor: gradients.length > 0 ? gradients : courseColors.map(c => c.bg),
+              borderColor: '#ffffff',
+              borderWidth: 3,
+              hoverBorderWidth: 5,
+              hoverOffset: 8
             }]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
+            cutout: '65%',
             plugins: {
               legend: {
-                position: 'bottom'
+                display: false
+              },
+              tooltip: {
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                titleColor: '#1f2937',
+                bodyColor: '#4b5563',
+                borderColor: '#e5e7eb',
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 12,
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                callbacks: {
+                  label: function(context) {
+                    const course = activeCourses[context.dataIndex];
+                    const completed = course.completedLessons || 0;
+                    const total = course.totalLessons || 0;
+                    return [
+                      `进度: ${context.parsed}%`,
+                      `已学: ${completed} / ${total} 小时`
+                    ];
+                  }
+                }
               }
+            },
+            animation: {
+              animateRotate: true,
+              animateScale: true,
+              duration: 1000,
+              easing: 'easeOutQuart'
             }
           }
         });
+        
+        // 更新详情列表
+        updateCourseProgressDetails(activeCourses, courseColors);
       }
     }
 
@@ -8849,11 +9326,19 @@
       const labels = [];
       const data = [];
       const now = new Date();
+      const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
       
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
         const dateStr = date.toISOString().split('T')[0];
-        labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+        const dayName = dayNames[date.getDay()];
+        
+        // 7天显示星期，30天显示日期
+        if (days <= 7) {
+          labels.push(dayName);
+        } else {
+          labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+        }
         
         const dayRecords = studyData.records.filter(r => r.date === dateStr);
         const totalMinutes = dayRecords.reduce((sum, r) => sum + r.duration, 0);
@@ -8862,18 +9347,547 @@
 
       studyTimeChart.data.labels = labels;
       studyTimeChart.data.datasets[0].data = data;
-      studyTimeChart.update();
+      studyTimeChart.update('active');
+      
+      // 更新统计信息
+      updateStudyTimeStats(data, days);
     }
+    
+    // 更新学习时间统计信息
+    function updateStudyTimeStats(data, days) {
+      const summaryElement = document.getElementById('studyTimeSummary');
+      const totalElement = document.getElementById('studyTimeTotal');
+      const avgElement = document.getElementById('studyTimeAvg');
+      const maxElement = document.getElementById('studyTimeMax');
+      
+      const total = data.reduce((sum, val) => sum + val, 0);
+      const avg = data.length > 0 ? Math.round(total / data.length) : 0;
+      const max = data.length > 0 ? Math.max(...data) : 0;
+      
+      // 更新摘要
+      if (summaryElement) {
+        const periodText = days <= 7 ? '本周' : '本月';
+        const totalHours = Math.floor(total / 60);
+        const totalMins = total % 60;
+        if (totalHours > 0) {
+          summaryElement.textContent = `${periodText} ${totalHours}小时${totalMins > 0 ? totalMins + '分' : ''}`;
+        } else {
+          summaryElement.textContent = `${periodText} ${total}分钟`;
+        }
+      }
+      
+      // 更新统计卡片
+      if (totalElement) {
+        totalElement.textContent = total;
+        // 根据总时长设置颜色
+        if (total >= 300) {
+          totalElement.className = 'text-lg font-bold text-emerald-600';
+        } else if (total >= 120) {
+          totalElement.className = 'text-lg font-bold text-indigo-600';
+        } else {
+          totalElement.className = 'text-lg font-bold text-gray-600';
+        }
+      }
+      
+      if (avgElement) {
+        avgElement.textContent = avg;
+        // 根据日均设置颜色
+        if (avg >= 60) {
+          avgElement.className = 'text-lg font-bold text-emerald-600';
+        } else if (avg >= 30) {
+          avgElement.className = 'text-lg font-bold text-indigo-600';
+        } else {
+          avgElement.className = 'text-lg font-bold text-gray-600';
+        }
+      }
+      
+      if (maxElement) {
+        maxElement.textContent = max;
+        // 根据最高记录设置颜色
+        if (max >= 120) {
+          maxElement.className = 'text-lg font-bold text-emerald-600';
+        } else if (max >= 60) {
+          maxElement.className = 'text-lg font-bold text-indigo-600';
+        } else {
+          maxElement.className = 'text-lg font-bold text-gray-600';
+        }
+      }
+      
+      // 更新学习习惯分析
+      updateStudyHabitsAnalysis(days);
+      
+      // 更新学习时段分布
+      updateTimeDistribution(days);
+      
+      // 更新打卡和目标
+      updateStreakAndGoals(days, total);
+    }
+    
+    // 更新学习时段分布
+    function updateTimeDistribution(days) {
+      const now = new Date();
+      const timeDistHint = document.getElementById('timeDistributionHint');
+      if (timeDistHint) {
+        timeDistHint.textContent = `基于最近${days}天数据`;
+      }
+      
+      // 初始化时段统计 (早晨: 5-8点, 上午: 8-12点, 下午: 12-18点, 晚上: 18-24点)
+      const timeSlots = { morning: 0, forenoon: 0, afternoon: 0, evening: 0 };
+      
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayRecords = studyData.records.filter(r => r.date === dateStr);
+        
+        dayRecords.forEach(record => {
+          if (record.startTime) {
+            const hour = parseInt(record.startTime.split(':')[0]);
+            if (hour >= 5 && hour < 8) timeSlots.morning += record.duration;
+            else if (hour >= 8 && hour < 12) timeSlots.forenoon += record.duration;
+            else if (hour >= 12 && hour < 18) timeSlots.afternoon += record.duration;
+            else timeSlots.evening += record.duration;
+          }
+        });
+      }
+      
+      // 更新显示
+      const morningEl = document.getElementById('morningTime');
+      const forenoonEl = document.getElementById('forenoonTime');
+      const afternoonEl = document.getElementById('afternoonTime');
+      const eveningEl = document.getElementById('eveningTime');
+      
+      if (morningEl) morningEl.textContent = timeSlots.morning;
+      if (forenoonEl) forenoonEl.textContent = timeSlots.forenoon;
+      if (afternoonEl) afternoonEl.textContent = timeSlots.afternoon;
+      if (eveningEl) eveningEl.textContent = timeSlots.evening;
+      
+      // 更新进度条
+      const total = timeSlots.morning + timeSlots.forenoon + timeSlots.afternoon + timeSlots.evening;
+      if (total > 0) {
+        const morningBar = document.getElementById('morningBar');
+        const forenoonBar = document.getElementById('forenoonBar');
+        const afternoonBar = document.getElementById('afternoonBar');
+        const eveningBar = document.getElementById('eveningBar');
+        
+        if (morningBar) morningBar.style.width = `${(timeSlots.morning / total) * 100}%`;
+        if (forenoonBar) forenoonBar.style.width = `${(timeSlots.forenoon / total) * 100}%`;
+        if (afternoonBar) afternoonBar.style.width = `${(timeSlots.afternoon / total) * 100}%`;
+        if (eveningBar) eveningBar.style.width = `${(timeSlots.evening / total) * 100}%`;
+      }
+    }
+    
+    // 更新打卡和目标
+    function updateStreakAndGoals(days, totalMinutes) {
+      const now = new Date();
+      const isWeek = days <= 7;
+      
+      // 更新提示文字
+      const streakHint = document.getElementById('streakHint');
+      const goalHint = document.getElementById('goalHint');
+      if (streakHint) streakHint.textContent = isWeek ? '本周' : '本月';
+      if (goalHint) goalHint.textContent = isWeek ? '周目标' : '月目标';
+      
+      // 计算连续学习天数
+      let streak = 0;
+      let hasBreak = false;
+      const streakDots = document.getElementById('streakDots');
+      
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayRecords = studyData.records.filter(r => r.date === dateStr);
+        const hasStudy = dayRecords.length > 0 && dayRecords.reduce((sum, r) => sum + r.duration, 0) > 0;
+        
+        if (hasStudy && !hasBreak) {
+          streak++;
+        } else if (!hasStudy) {
+          hasBreak = true;
+        }
+        
+        // 更新打卡圆点
+        if (streakDots && streakDots.children[days - 1 - i]) {
+          const dot = streakDots.children[days - 1 - i];
+          if (hasStudy) {
+            dot.className = 'w-4 h-4 rounded-full bg-rose-500 shadow-sm';
+            dot.innerHTML = '<i class="fa fa-check text-white text-xs flex items-center justify-center h-full"></i>';
+          } else {
+            dot.className = 'w-4 h-4 rounded-full bg-rose-100';
+            dot.innerHTML = '';
+          }
+        }
+      }
+      
+      const streakEl = document.getElementById('studyStreak');
+      if (streakEl) streakEl.textContent = streak;
+      
+      // 计算目标进度 (周目标: 420分钟/7小时, 月目标: 1800分钟/30小时)
+      const goalMinutes = isWeek ? 420 : 1800;
+      const progress = Math.min(100, Math.round((totalMinutes / goalMinutes) * 100));
+      
+      const goalProgressEl = document.getElementById('goalProgress');
+      const goalProgressBar = document.getElementById('goalProgressBar');
+      const currentGoalText = document.getElementById('currentGoalText');
+      const goalStatus = document.getElementById('goalStatus');
+      
+      if (goalProgressEl) goalProgressEl.textContent = progress;
+      if (goalProgressBar) goalProgressBar.style.width = `${progress}%`;
+      if (currentGoalText) {
+        const totalHours = Math.floor(totalMinutes / 60);
+        const goalHours = Math.floor(goalMinutes / 60);
+        currentGoalText.textContent = `${totalHours}/${goalHours}小时`;
+      }
+      if (goalStatus) {
+        if (progress >= 100) {
+          goalStatus.textContent = '已达标 🎉';
+          goalStatus.className = 'text-xs font-medium text-emerald-600';
+        } else if (progress >= 60) {
+          goalStatus.textContent = '进行中 💪';
+          goalStatus.className = 'text-xs font-medium text-amber-600';
+        } else {
+          goalStatus.textContent = '加油哦 🌟';
+          goalStatus.className = 'text-xs font-medium text-gray-500';
+        }
+      }
+    }
+    
+    // 更新学习效率分析
+    function updateStudyHabitsAnalysis(days) {
+      const now = new Date();
+      let studyDays = 0;
+      let totalSessions = 0;
+      let totalDuration = 0;
+      
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayRecords = studyData.records.filter(r => r.date === dateStr);
+        
+        if (dayRecords.length > 0) {
+          const dayDuration = dayRecords.reduce((sum, r) => sum + r.duration, 0);
+          if (dayDuration > 0) {
+            studyDays++;
+            totalDuration += dayDuration;
+            totalSessions += dayRecords.length;
+          }
+        }
+      }
+      
+      const avgSession = totalSessions > 0 ? Math.round(totalDuration / totalSessions) : 0;
+      
+      // 计算专注指数 (0-100分)
+      let focusIndex = 0;
+      if (studyDays > 0) {
+        const consistencyScore = (studyDays / days) * 40; // 连续性 40分
+        const durationScore = Math.min(30, (totalDuration / days) / 2); // 日均时长 30分
+        const sessionScore = Math.min(30, avgSession / 2); // 单次时长 30分
+        focusIndex = Math.round(consistencyScore + durationScore + sessionScore);
+      }
+      
+      // 更新显示
+      const studyDaysEl = document.getElementById('studyDays');
+      const avgSessionEl = document.getElementById('avgSession');
+      const focusIndexEl = document.getElementById('focusIndex');
+      const efficiencyTag = document.getElementById('efficiencyTag');
+      
+      if (studyDaysEl) studyDaysEl.textContent = studyDays;
+      if (avgSessionEl) avgSessionEl.textContent = avgSession;
+      if (focusIndexEl) focusIndexEl.textContent = focusIndex;
+      
+      if (efficiencyTag) {
+        if (focusIndex >= 80) {
+          efficiencyTag.textContent = '优秀';
+          efficiencyTag.className = 'text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600';
+        } else if (focusIndex >= 60) {
+          efficiencyTag.textContent = '良好';
+          efficiencyTag.className = 'text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600';
+        } else if (focusIndex >= 40) {
+          efficiencyTag.textContent = '一般';
+          efficiencyTag.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600';
+        } else {
+          efficiencyTag.textContent = '需提升';
+          efficiencyTag.className = 'text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500';
+        }
+      }
+    }
+    
+
 
     function updateStudyCharts() {
       updateStudyTimeChart(7);
       
       if (courseProgressChart) {
         const activeCourses = studyData.courses.filter(c => c.status === 'active');
+        const courseColors = [
+          { bg: 'rgba(79, 70, 229, 0.9)', border: '#4f46e5', gradient: ['#6366f1', '#4f46e5'] },
+          { bg: 'rgba(16, 185, 129, 0.9)', border: '#10b981', gradient: ['#34d399', '#10b981'] },
+          { bg: 'rgba(245, 158, 11, 0.9)', border: '#f59e0b', gradient: ['#fbbf24', '#f59e0b'] },
+          { bg: 'rgba(239, 68, 68, 0.9)', border: '#ef4444', gradient: ['#f87171', '#ef4444'] },
+          { bg: 'rgba(139, 92, 246, 0.9)', border: '#8b5cf6', gradient: ['#a78bfa', '#8b5cf6'] },
+          { bg: 'rgba(236, 72, 153, 0.9)', border: '#ec4899', gradient: ['#f472b6', '#ec4899'] },
+          { bg: 'rgba(14, 165, 233, 0.9)', border: '#0ea5e9', gradient: ['#38bdf8', '#0ea5e9'] },
+          { bg: 'rgba(249, 115, 22, 0.9)', border: '#f97316', gradient: ['#fb923c', '#f97316'] }
+        ];
+        
         courseProgressChart.data.labels = activeCourses.map(c => c.name);
         courseProgressChart.data.datasets[0].data = activeCourses.map(c => c.progress || 0);
-        courseProgressChart.update();
+        courseProgressChart.update('active');
+        
+        // 更新详情列表
+        updateCourseProgressDetails(activeCourses, courseColors);
       }
+    }
+    
+    // 更新课程进度详情列表
+    function updateCourseProgressDetails(activeCourses, courseColors) {
+      const detailsContainer = document.getElementById('courseProgressDetails');
+      const summaryElement = document.getElementById('courseProgressSummary');
+      const overallProgressElement = document.getElementById('overallProgress');
+      
+      if (!detailsContainer) return;
+      
+      // 更新摘要信息
+      if (summaryElement) {
+        summaryElement.textContent = `${activeCourses.length} 门进行中`;
+      }
+      
+      // 计算总体进度
+      let totalProgress = 0;
+      let totalCompleted = 0;
+      let totalLessons = 0;
+      activeCourses.forEach(course => {
+        totalProgress += (course.progress || 0);
+        totalCompleted += (course.completedLessons || 0);
+        totalLessons += (course.totalLessons || 0);
+      });
+      const overallProgress = activeCourses.length > 0 ? Math.round(totalProgress / activeCourses.length) : 0;
+      const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+      
+      if (overallProgressElement) {
+        overallProgressElement.textContent = `${overallPercent}%`;
+        // 根据进度设置颜色
+        if (overallPercent >= 80) {
+          overallProgressElement.className = 'text-3xl font-bold text-emerald-500';
+        } else if (overallPercent >= 50) {
+          overallProgressElement.className = 'text-3xl font-bold text-amber-500';
+        } else {
+          overallProgressElement.className = 'text-3xl font-bold text-indigo-500';
+        }
+      }
+      
+      if (activeCourses.length === 0) {
+        detailsContainer.innerHTML = `
+          <div class="text-center py-4 text-gray-400 text-sm">
+            <i class="fa fa-book mb-2 block text-2xl"></i>
+            暂无进行中的课程
+          </div>
+        `;
+        return;
+      }
+      
+      detailsContainer.innerHTML = activeCourses.map((course, index) => {
+        const color = courseColors[index % courseColors.length];
+        const progress = course.progress || 0;
+        const completed = course.completedLessons || 0;
+        const total = course.totalLessons || 0;
+        const remaining = Math.max(0, total - completed);
+        
+        // 根据进度确定状态颜色
+        let statusColor = 'bg-gray-200';
+        let statusText = '未开始';
+        if (progress >= 100) {
+          statusColor = 'bg-emerald-500';
+          statusText = '已完成';
+        } else if (progress >= 70) {
+          statusColor = 'bg-emerald-400';
+          statusText = '即将完成';
+        } else if (progress >= 40) {
+          statusColor = 'bg-amber-400';
+          statusText = '进行中';
+        } else if (progress > 0) {
+          statusColor = 'bg-indigo-400';
+          statusText = '刚开始';
+        }
+        
+        return `
+          <div class="group hover:bg-gray-50 rounded-lg p-2 transition-all duration-200 cursor-pointer" onclick="openCourseModal('${course.id}')">
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <div class="w-3 h-3 rounded-full flex-shrink-0" style="background: linear-gradient(135deg, ${color.gradient[0]}, ${color.gradient[1]})"></div>
+                <span class="text-sm font-medium text-gray-700 truncate">${course.name}</span>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-xs text-gray-500">${completed}/${total}小时</span>
+                <span class="text-xs font-semibold" style="color: ${color.border}">${progress}%</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-500 ease-out" 
+                     style="width: ${progress}%; background: linear-gradient(90deg, ${color.gradient[0]}, ${color.gradient[1]})"></div>
+              </div>
+              <div class="flex-shrink-0 w-16 text-right">
+                <span class="text-xs px-2 py-0.5 rounded-full text-white ${statusColor}">${statusText}</span>
+              </div>
+            </div>
+            ${remaining > 0 ? `<div class="mt-1 text-xs text-gray-400">还需 ${remaining} 小时</div>` : ''}
+          </div>
+        `;
+      }).join('');
+      
+      // 更新课程统计概览
+      updateCourseStatsOverview();
+      
+      // 更新最近学习课程
+      updateRecentCourseList();
+      
+      // 更新学习建议
+      updateStudySuggestion(activeCourses);
+    }
+    
+    // 更新课程统计概览
+    function updateCourseStatsOverview() {
+      const allCourses = studyData.courses || [];
+      const totalCourses = allCourses.length;
+      const completedCourses = allCourses.filter(c => c.status === 'completed' || (c.progress || 0) >= 100).length;
+      const activeCourses = allCourses.filter(c => c.status === 'active' && (c.progress || 0) < 100).length;
+      const totalLessons = allCourses.reduce((sum, c) => sum + (c.totalLessons || 0), 0);
+      
+      const totalEl = document.getElementById('totalCourses');
+      const completedEl = document.getElementById('completedCourses');
+      const activeEl = document.getElementById('activeCourses');
+      const lessonsEl = document.getElementById('totalLessons');
+      
+      if (totalEl) totalEl.textContent = totalCourses;
+      if (completedEl) completedEl.textContent = completedCourses;
+      if (activeEl) activeEl.textContent = activeCourses;
+      if (lessonsEl) lessonsEl.textContent = totalLessons;
+    }
+    
+    // 更新最近学习课程列表
+    function updateRecentCourseList() {
+      const recentList = document.getElementById('recentCourseList');
+      const lastStudyTime = document.getElementById('lastStudyTime');
+      
+      if (!recentList) return;
+      
+      // 获取最近的学习记录，按日期排序
+      const recentRecords = [...studyData.records]
+        .sort((a, b) => new Date(b.date + 'T' + (b.startTime || '00:00')) - new Date(a.date + 'T' + (a.startTime || '00:00')))
+        .slice(0, 3);
+      
+      if (recentRecords.length === 0) {
+        recentList.innerHTML = `
+          <div class="text-center py-3 text-gray-400 text-xs">
+            <i class="fa fa-book mr-1"></i>暂无学习记录
+          </div>
+        `;
+        if (lastStudyTime) lastStudyTime.textContent = '暂无记录';
+        return;
+      }
+      
+      // 更新最后学习时间
+      if (lastStudyTime && recentRecords[0]) {
+        const lastDate = recentRecords[0].date;
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        
+        if (lastDate === today) {
+          lastStudyTime.textContent = '今天';
+        } else if (lastDate === yesterday) {
+          lastStudyTime.textContent = '昨天';
+        } else {
+          lastStudyTime.textContent = lastDate.substring(5);
+        }
+      }
+      
+      // 获取课程颜色
+      const courseColors = [
+        { bg: 'bg-indigo-100', text: 'text-indigo-600', border: 'border-indigo-200' },
+        { bg: 'bg-emerald-100', text: 'text-emerald-600', border: 'border-emerald-200' },
+        { bg: 'bg-amber-100', text: 'text-amber-600', border: 'border-amber-200' },
+        { bg: 'bg-rose-100', text: 'text-rose-600', border: 'border-rose-200' },
+        { bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200' },
+        { bg: 'bg-cyan-100', text: 'text-cyan-600', border: 'border-cyan-200' }
+      ];
+      
+      // 获取课程名称映射
+      const courseMap = {};
+      studyData.courses.forEach((c, i) => {
+        courseMap[c.id] = { name: c.name, colorIndex: i % courseColors.length };
+      });
+      
+      recentList.innerHTML = recentRecords.map(record => {
+        const courseInfo = courseMap[record.courseId] || { name: '未知课程', colorIndex: 0 };
+        const color = courseColors[courseInfo.colorIndex];
+        const duration = record.duration || 0;
+        const hours = Math.floor(duration / 60);
+        const mins = duration % 60;
+        const durationText = hours > 0 ? `${hours}小时${mins}分` : `${mins}分钟`;
+        
+        return `
+          <div class="flex items-center gap-2 p-2 rounded-lg ${color.bg} border ${color.border}">
+            <div class="flex-shrink-0 w-6 h-6 rounded-full bg-white flex items-center justify-center">
+              <i class="fa fa-graduation-cap ${color.text} text-xs"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-medium ${color.text} truncate">${courseInfo.name}</div>
+              <div class="text-xs text-gray-500">${record.content || '学习内容'}</div>
+            </div>
+            <div class="flex-shrink-0 text-xs ${color.text} font-medium">${durationText}</div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    // 更新学习建议
+    function updateStudySuggestion(activeCourses) {
+      const suggestionEl = document.getElementById('studySuggestion');
+      if (!suggestionEl) return;
+      
+      const allCourses = studyData.courses || [];
+      const totalCourses = allCourses.length;
+      
+      if (totalCourses === 0) {
+        suggestionEl.textContent = '开始添加课程并记录学习进度，让学习更有计划性！';
+        return;
+      }
+      
+      const completedCourses = allCourses.filter(c => (c.progress || 0) >= 100).length;
+      const avgProgress = totalCourses > 0 
+        ? allCourses.reduce((sum, c) => sum + (c.progress || 0), 0) / totalCourses 
+        : 0;
+      
+      // 找出进度最低的课程
+      const lowestProgressCourse = activeCourses.length > 0
+        ? activeCourses.reduce((min, c) => (c.progress || 0) < (min.progress || 0) ? c : min, activeCourses[0])
+        : null;
+      
+      // 生成建议
+      let suggestion = '';
+      if (completedCourses === totalCourses && totalCourses > 0) {
+        suggestion = '🎉 太棒了！您已完成所有课程，可以考虑添加新的学习目标了。';
+      } else if (avgProgress >= 80) {
+        suggestion = '💪 您的学习进度非常好，保持这个节奏，即将完成所有课程！';
+      } else if (avgProgress >= 50) {
+        suggestion = '📚 学习进度不错，建议每天保持学习，争取早日完成目标。';
+      } else if (avgProgress >= 20) {
+        if (lowestProgressCourse) {
+          suggestion = `🌟 建议优先学习「${lowestProgressCourse.name}」，提升整体进度。`;
+        } else {
+          suggestion = '🌟 建议制定学习计划，每天投入一些时间，积少成多。';
+        }
+      } else {
+        suggestion = '🚀 学习之路刚开始，建议从最简单的课程入手，建立学习习惯。';
+      }
+      
+      // 如果有即将完成的课程，添加提示
+      const almostDone = activeCourses.filter(c => (c.progress || 0) >= 80 && (c.progress || 0) < 100);
+      if (almostDone.length > 0) {
+        const courseNames = almostDone.map(c => c.name).join('、');
+        suggestion += ` 课程「${courseNames}」即将完成，加油！`;
+      }
+      
+      suggestionEl.textContent = suggestion;
     }
 
     // 导出学习数据
@@ -9012,6 +10026,7 @@
       renderPendingHousework();
       renderInProgressHousework();
       renderCompletedHousework();
+      renderOverdueHousework();
       initHouseworkCharts();
       updateHouseworkStatistics();
 
@@ -9103,6 +10118,11 @@
       document.getElementById('completedHouseworkFilterType')?.addEventListener('change', () => renderCompletedHousework());
       document.getElementById('completedHouseworkFilterOverdue')?.addEventListener('change', () => renderCompletedHousework());
 
+      // 逾期家务筛选
+      document.getElementById('overdueHouseworkSearchInput')?.addEventListener('input', () => renderOverdueHousework());
+      document.getElementById('overdueHouseworkFilterPriority')?.addEventListener('change', () => renderOverdueHousework());
+      document.getElementById('overdueHouseworkFilterType')?.addEventListener('change', () => renderOverdueHousework());
+
       // 查看全部家务
       document.getElementById('viewAllHouseworkBtn')?.addEventListener('click', () => switchHouseworkTab('pending'));
 
@@ -9137,6 +10157,8 @@
         renderRecentHousework();
       } else if (tab === 'statistics') {
         updateHouseworkStatistics();
+      } else if (tab === 'overdue') {
+        renderOverdueHousework();
       }
     }
 
@@ -9345,6 +10367,7 @@
       renderPendingHousework();
       renderInProgressHousework();
       renderCompletedHousework();
+      renderOverdueHousework();
       renderRecentHousework();
       updateHouseworkStatistics();
 
@@ -9367,6 +10390,7 @@
         renderPendingHousework();
         renderInProgressHousework();
         renderCompletedHousework();
+        renderOverdueHousework();
         renderRecentHousework();
         updateHouseworkStatistics();
 
@@ -9395,6 +10419,7 @@
         renderPendingHousework();
         renderInProgressHousework();
         renderCompletedHousework();
+        renderOverdueHousework();
         renderRecentHousework();
         updateHouseworkStatistics();
 
@@ -9416,6 +10441,7 @@
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
+        renderOverdueHousework();
         renderRecentHousework();
         updateHouseworkStatistics();
 
@@ -9441,6 +10467,7 @@
         renderPendingHousework();
         renderInProgressHousework();
         renderCompletedHousework();
+        renderOverdueHousework();
         renderRecentHousework();
         updateHouseworkStatistics();
 
@@ -9455,22 +10482,53 @@
       }
     }
 
-    // 渲染待办家务
+    // 渲染待办家务（排除逾期家务）
     function renderPendingHousework() {
       const container = document.getElementById('pendingHouseworkContainer');
       if (!container) return;
 
-      const filteredTasks = filterHousework('pending', 'pendingHouseworkSearchInput', 'pendingHouseworkFilterPriority', 'pendingHouseworkFilterType', 'pendingHouseworkFilterOverdue');
+      const filteredTasks = filterHouseworkExcludeOverdue('pending', 'pendingHouseworkSearchInput', 'pendingHouseworkFilterPriority', 'pendingHouseworkFilterType');
       renderHouseworkList(container, filteredTasks, 'pending');
     }
 
-    // 渲染进行中家务
+    // 渲染进行中家务（排除逾期家务）
     function renderInProgressHousework() {
       const container = document.getElementById('inprogressHouseworkContainer');
       if (!container) return;
 
-      const filteredTasks = filterHousework('in-progress', 'inprogressHouseworkSearchInput', 'inprogressHouseworkFilterPriority', 'inprogressHouseworkFilterType', 'inprogressHouseworkFilterOverdue');
+      const filteredTasks = filterHouseworkExcludeOverdue('in-progress', 'inprogressHouseworkSearchInput', 'inprogressHouseworkFilterPriority', 'inprogressHouseworkFilterType');
       renderHouseworkList(container, filteredTasks, 'in-progress');
+    }
+
+    // 筛选家务（排除逾期家务，用于待办和进行中模块）
+    function filterHouseworkExcludeOverdue(status, searchInputId, priorityFilterId, typeFilterId) {
+      const searchQuery = document.getElementById(searchInputId)?.value.toLowerCase() || '';
+      const priorityFilter = document.getElementById(priorityFilterId)?.value || 'all';
+      const typeFilter = document.getElementById(typeFilterId)?.value || 'all';
+
+      return houseworkData.tasks.filter(task => {
+        // 状态匹配
+        if (task.status !== status) return false;
+
+        // 排除逾期家务（逾期家务只在逾期家务模块显示）
+        if (isHouseworkOverdue(task)) return false;
+
+        // 搜索匹配
+        const matchesSearch = task.title.toLowerCase().includes(searchQuery) ||
+                           (task.description && task.description.toLowerCase().includes(searchQuery));
+
+        // 优先级匹配
+        const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+
+        // 类型匹配
+        const matchesType = typeFilter === 'all' || task.type === typeFilter;
+
+        return matchesSearch && matchesPriority && matchesType;
+      }).sort((a, b) => {
+        // 按优先级排序：高 > 中 > 低
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      });
     }
 
     // 渲染已完成家务
@@ -9480,6 +10538,166 @@
 
       const filteredTasks = filterHousework('completed', 'completedHouseworkSearchInput', 'completedHouseworkFilterPriority', 'completedHouseworkFilterType', 'completedHouseworkFilterOverdue');
       renderHouseworkList(container, filteredTasks, 'completed');
+    }
+
+    // 渲染逾期家务
+    function renderOverdueHousework() {
+      const container = document.getElementById('overdueHouseworkContainer');
+      const countBadge = document.getElementById('overdueCountBadge');
+      if (!container) return;
+
+      // 获取所有逾期的任务（包括待办和进行中的）
+      let overdueTasks = houseworkData.tasks.filter(task => {
+        return task.status !== 'completed' && isHouseworkOverdue(task);
+      });
+
+      // 搜索筛选
+      const searchQuery = document.getElementById('overdueHouseworkSearchInput')?.value.toLowerCase() || '';
+      if (searchQuery) {
+        overdueTasks = overdueTasks.filter(task => 
+          task.title.toLowerCase().includes(searchQuery) ||
+          (task.description && task.description.toLowerCase().includes(searchQuery))
+        );
+      }
+
+      // 优先级筛选
+      const priorityFilter = document.getElementById('overdueHouseworkFilterPriority')?.value || 'all';
+      if (priorityFilter !== 'all') {
+        overdueTasks = overdueTasks.filter(task => task.priority === priorityFilter);
+      }
+
+      // 类型筛选
+      const typeFilter = document.getElementById('overdueHouseworkFilterType')?.value || 'all';
+      if (typeFilter !== 'all') {
+        overdueTasks = overdueTasks.filter(task => task.type === typeFilter);
+      }
+
+      // 更新数量徽章
+      if (countBadge) {
+        countBadge.textContent = `${overdueTasks.length} 项逾期`;
+      }
+
+      // 按逾期天数排序（逾期越久越靠前）
+      overdueTasks.sort((a, b) => {
+        const dateA = a.dueDate ? new Date(a.dueDate) : new Date(0);
+        const dateB = b.dueDate ? new Date(b.dueDate) : new Date(0);
+        return dateA - dateB;
+      });
+
+      if (overdueTasks.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 text-gray-500">
+            <i class="fa fa-calendar-check text-5xl mb-4 text-gray-300"></i>
+            <p class="text-lg">暂无逾期家务</p>
+            <p class="text-sm text-gray-400 mt-2">太棒了！您的家务都在按时完成</p>
+          </div>
+        `;
+        return;
+      }
+
+      // 计算逾期天数
+      const now = new Date();
+      container.innerHTML = overdueTasks.map(task => {
+        const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+        const daysOverdue = dueDate ? Math.floor((now - dueDate) / (1000 * 60 * 60 * 24)) : 0;
+        
+        return createOverdueHouseworkElement(task, daysOverdue);
+      }).join('');
+
+      // 添加事件监听器
+      container.querySelectorAll('.delete-housework-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteHousework(btn.dataset.houseworkId);
+        });
+      });
+
+      container.querySelectorAll('.start-housework-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          startHousework(btn.dataset.houseworkId);
+        });
+      });
+
+      container.querySelectorAll('.complete-housework-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          completeHousework(btn.dataset.houseworkId);
+        });
+      });
+    }
+
+    // 创建逾期家务元素
+    function createOverdueHouseworkElement(task, daysOverdue) {
+      const priorityColors = {
+        high: { border: 'border-red-500', bg: 'bg-red-50', text: 'text-red-800', badge: 'bg-red-100 text-red-700' },
+        medium: { border: 'border-orange-500', bg: 'bg-orange-50', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-700' },
+        low: { border: 'border-yellow-500', bg: 'bg-yellow-50', text: 'text-yellow-800', badge: 'bg-yellow-100 text-yellow-700' }
+      };
+
+      const typeNames = {
+        cleaning: '清洁',
+        cooking: '烹饪',
+        laundry: '洗衣',
+        shopping: '购物',
+        other: '其他'
+      };
+
+      const colors = priorityColors[task.priority] || priorityColors.low;
+      const typeBadge = `<span class="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded-full">${typeNames[task.type] || '其他'}</span>`;
+      
+      const statusBadge = {
+        pending: '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">待办</span>',
+        'in-progress': '<span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">进行中</span>'
+      };
+
+      return `
+        <div class="bg-white rounded-xl shadow-lg border-l-4 ${colors.border} p-6 transition-all duration-300 hover:shadow-xl">
+          <div class="flex items-start justify-between">
+            <div class="flex items-start flex-1">
+              <div class="flex-shrink-0 mt-1 mr-3">
+                <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                  <i class="fa fa-exclamation text-red-500"></i>
+                </div>
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <h4 class="text-lg font-semibold ${colors.text}">${task.title}</h4>
+                  <span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
+                    <i class="fa fa-clock-o mr-1"></i>逾期 ${daysOverdue} 天
+                  </span>
+                </div>
+                ${task.description ? `<p class="text-gray-600 text-sm mb-3">${task.description}</p>` : ''}
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                  ${statusBadge[task.status]}
+                  ${typeBadge}
+                  <span class="px-2 py-1 ${colors.badge} text-xs rounded-full">${task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}优先级</span>
+                </div>
+                <div class="flex items-center text-xs text-gray-500 mt-2 space-x-4">
+                  ${task.createdAt ? `<span><i class="fa fa-clock-o mr-1"></i>创建: ${task.createdAt}</span>` : ''}
+                  ${task.dueDate ? `<span class="text-red-500"><i class="fa fa-calendar mr-1"></i>截止: ${task.dueDate}</span>` : ''}
+                  ${task.assignee ? `<span><i class="fa fa-user mr-1"></i>${task.assignee}</span>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="flex space-x-2 ml-4">
+              ${task.status === 'pending' ? `
+                <button class="start-housework-btn p-2 text-gray-400 hover:text-blue-600 transition-colors" data-housework-id="${task.id}" title="开始进行">
+                  <i class="fa fa-play"></i>
+                </button>
+              ` : ''}
+              ${task.status === 'in-progress' ? `
+                <button class="complete-housework-btn p-2 text-gray-400 hover:text-green-600 transition-colors" data-housework-id="${task.id}" title="标记完成">
+                  <i class="fa fa-check"></i>
+                </button>
+              ` : ''}
+              <button class="delete-housework-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-housework-id="${task.id}" title="删除">
+                <i class="fa fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     // 筛选家务
@@ -9548,13 +10766,6 @@
         });
       });
 
-      document.querySelectorAll('.toggle-complete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleHouseworkComplete(btn.dataset.houseworkId);
-        });
-      });
-
       document.querySelectorAll('.start-housework-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -9575,8 +10786,9 @@
       const container = document.getElementById('recentHousework');
       if (!container) return;
 
+      // 最近家务只显示未完成的非逾期家务（逾期家务在逾期家务模块显示）
       const recentTasks = [...houseworkData.tasks]
-        .filter(t => t.status !== 'completed')
+        .filter(t => t.status !== 'completed' && !isHouseworkOverdue(t))
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
         .slice(0, 5);
 
@@ -9609,8 +10821,8 @@
         return `
           <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
             <div class="flex items-center flex-1">
-              <button class="toggle-complete-btn mr-3" data-housework-id="${task.id}">
-                <i class="fa fa-circle-o text-gray-400 text-lg hover:text-teal-600"></i>
+              <button class="delete-housework-btn mr-3" data-housework-id="${task.id}" title="删除家务">
+                <i class="fa fa-check-circle text-gray-400 text-lg hover:text-red-500"></i>
               </button>
               <div class="flex-1">
                 <p class="font-medium text-gray-800">${task.title}</p>
@@ -9629,6 +10841,14 @@
           </div>
         `;
       }).join('');
+      
+      // 为最近家务列表的删除按钮添加事件监听器
+      container.querySelectorAll('.delete-housework-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteHousework(btn.dataset.houseworkId);
+        });
+      });
     }
 
     // 创建家务元素
@@ -9658,13 +10878,18 @@
 
       const typeBadge = `<span class="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded-full">${typeNames[task.type] || '其他'}</span>`;
 
+      // 只有已完成的家务才显示左上角删除按钮
+      const deleteButton = isCompleted ? `
+        <button class="delete-housework-btn mt-1 mr-3" data-housework-id="${task.id}" title="删除家务">
+          <i class="fa fa-check-circle text-gray-400 hover:text-red-500 text-xl hover:scale-110 transition-transform"></i>
+        </button>
+      ` : '';
+
       return `
         <div class="bg-white rounded-xl shadow-lg border-l-4 ${colors.border} p-6 transition-all duration-300 hover:shadow-xl ${isCompleted ? 'opacity-60' : ''}">
           <div class="flex items-start justify-between">
             <div class="flex items-start flex-1">
-              <button class="toggle-complete-btn mt-1 mr-3" data-housework-id="${task.id}">
-                <i class="fa ${isCompleted ? 'fa-check-circle text-green-500' : 'fa-circle-o text-gray-400'} text-xl hover:scale-110 transition-transform"></i>
-              </button>
+              ${deleteButton}
               <div class="flex-1">
                 <h4 class="text-lg font-semibold ${isCompleted ? 'line-through text-gray-400' : colors.text} mb-2">${task.title}</h4>
                 ${task.description ? `<p class="text-gray-600 text-sm mb-3">${task.description}</p>` : ''}
@@ -9692,9 +10917,6 @@
                   <i class="fa fa-check"></i>
                 </button>
               ` : ''}
-              <button class="delete-housework-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-housework-id="${task.id}" title="删除">
-                <i class="fa fa-trash"></i>
-              </button>
             </div>
           </div>
         </div>
@@ -9721,6 +10943,7 @@
         renderPendingHousework();
         renderInProgressHousework();
         renderCompletedHousework();
+        renderOverdueHousework();
         renderRecentHousework();
         updateHouseworkStatistics();
         AppHelper.showNotification('成功', '家务数据已导入', 'success');
@@ -10048,7 +11271,7 @@
       const inProgressCount = taskData.tasks.filter(t => t.status === 'in-progress').length;
       const completedCount = taskData.tasks.filter(t => t.status === 'completed').length;
 
-      // 计算逾期任务
+      // 计算逾期家务
       const today = new Date();
       const overdueCount = taskData.tasks.filter(t => {
         if (t.status !== 'completed' && t.dueDate) {
