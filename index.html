@@ -1482,7 +1482,7 @@
         
         this.isSyncing = true;
         
-        const keys = ['familyFinanceData', 'studyData', 'taskData', 'houseworkData'];
+        const keys = ['familyFinanceData', 'studyData', 'houseworkData'];
         
         // 上传本地数据到 Supabase
         for (const key of keys) {
@@ -1580,8 +1580,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             exportDate: new Date().toISOString(),
             data: {
               familyFinanceData: await this.get('familyFinanceData', {}),
-              studyData: await this.get('studyData', {}),
-              taskData: await this.get('taskData', {})
+              studyData: await this.get('studyData', {})
             }
           };
           
@@ -1628,9 +1627,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           if (data.data.studyData) {
             this.set('studyData', data.data.studyData);
           }
-          if (data.data.taskData) {
-            this.set('taskData', data.data.taskData);
-          }
           
           return true;
         } catch (e) {
@@ -1645,8 +1641,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           // 获取当前存储的数据
           const currentData = {
             familyFinanceData: this.get('familyFinanceData', {}),
-            studyData: this.get('studyData', {}),
-            taskData: this.get('taskData', {})
+            studyData: this.get('studyData', {})
           };
           
           // 这里可以添加更复杂的冲突解决逻辑
@@ -2460,9 +2455,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const activeCourses = studyData.courses.filter(c => c.status === 'active');
         document.getElementById('homeActiveCourses').textContent = `${activeCourses.length}门`;
 
-        // 更新首页的待办家务数量
-        const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
-        document.getElementById('homePendingHousework').textContent = `${pendingHousework}项`;
+        // 更新首页的待办家务数量（排除逾期）
+      const today = new Date();
+      const pendingHousework = houseworkData.tasks.filter(t => 
+        t.status === 'pending' && 
+        (!t.dueDate || new Date(t.dueDate) >= today)
+      ).length;
+      document.getElementById('homePendingHousework').textContent = `${pendingHousework}项`;
       }
 
       // 更新收支趋势图
@@ -5089,8 +5088,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 只隐藏财务模块的 tab-content（排除其他模块的）
         document.querySelectorAll('.tab-content').forEach(content => {
           const contentId = content.id;
-          // 只隐藏财务模块的 tab-content（不包含 study-, housework-, task- 前缀的）
-          if (!contentId.startsWith('study-') && !contentId.startsWith('housework-') && !contentId.startsWith('task-')) {
+          // 只隐藏财务模块的 tab-content（不包含 study-, housework- 前缀的）
+          if (!contentId.startsWith('study-') && !contentId.startsWith('housework-')) {
             content.classList.add('hidden');
           }
         });
@@ -6111,286 +6110,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     </main>
   </div>
 
-  <!-- 任务管理模块 -->
-  <div id="task-module" class="hidden">
-    <!-- 顶部导航栏 -->
-    <nav class="bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-40">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-          <div class="flex items-center space-x-3">
-            <div class="bg-orange-600/10 p-2 rounded-lg">
-              <i class="fa fa-tasks text-orange-600 text-2xl"></i>
-            </div>
-            <h1 class="text-lg font-bold text-gray-800 tracking-tight">任务管理系统</h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <button id="exportTaskDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-orange-600 shadow-lg shadow-orange-600/30 hover:bg-orange-700 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-download mr-2"></i> 导出数据
-            </button>
-            <button id="importTaskDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-upload mr-2"></i> 导入数据
-            </button>
-            <input type="file" id="importTaskDataInput" accept=".json" class="hidden">
-            <button id="backToHomeFromTask" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-home mr-2"></i> 返回首页
-            </button>
-          </div>
-        </div>
-      </div>
-    </nav>
-
-    <!-- 主内容区 -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <!-- 标签页导航 -->
-      <div class="mb-6 border-b border-gray-200">
-        <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="taskTabNav" role="tablist">
-          <li class="mr-2" role="presentation">
-            <button class="inline-block p-4 border-b-2 border-orange-600 text-orange-600 rounded-t-lg active" id="task-dashboard-tab" data-tab="dashboard" type="button" role="tab" aria-selected="true">
-              <i class="fa fa-dashboard mr-1"></i> 任务概览
-            </button>
-          </li>
-          <li class="mr-2" role="presentation">
-            <button class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg" id="task-pending-tab" data-tab="pending" type="button" role="tab" aria-selected="false">
-              <i class="fa fa-list-ul mr-1"></i> 待办任务
-            </button>
-          </li>
-          <li class="mr-2" role="presentation">
-            <button class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg" id="task-inprogress-tab" data-tab="inprogress" type="button" role="tab" aria-selected="false">
-              <i class="fa fa-spinner mr-1"></i> 进行中
-            </button>
-          </li>
-          <li class="mr-2" role="presentation">
-            <button class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg" id="task-completed-tab" data-tab="completed" type="button" role="tab" aria-selected="false">
-              <i class="fa fa-check-circle mr-1"></i> 已完成
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg" id="task-statistics-tab" data-tab="statistics" type="button" role="tab" aria-selected="false">
-              <i class="fa fa-line-chart mr-1"></i> 统计分析
-            </button>
-          </li>
-        </ul>
-      </div>
-
-      <!-- 任务概览 -->
-      <div id="task-dashboard-tab-content" class="tab-content active animate-fade-in">
-        <!-- 任务头部横幅 -->
-        <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl p-8 mb-8 text-white shadow-2xl">
-          <div class="flex flex-col md:flex-row items-center justify-between">
-            <div class="text-center md:text-left mb-6 md:mb-0">
-              <h2 class="text-3xl font-bold mb-2">任务概览</h2>
-              <p class="text-orange-100 text-lg">高效管理您的待办事项和项目进度</p>
-            </div>
-            <button id="quickAddTaskBtn" class="bg-white text-orange-600 px-6 py-3 rounded-xl font-medium hover:bg-orange-50 transition-all duration-300 flex items-center shadow-lg">
-              <i class="fa fa-plus mr-2"></i> 快速添加
-            </button>
-          </div>
-        </div>
-
-        <!-- 任务统计卡片 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-8">
-          <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 border-l-4 border-orange-500 transition-all duration-300 hover:shadow-xl">
-            <div class="flex items-center">
-              <div class="bg-orange-100 p-2 sm:p-3 rounded-full mr-3 sm:mr-4">
-                <i class="fa fa-list-ul text-orange-600 text-lg sm:text-xl"></i>
-              </div>
-              <div>
-                <p class="text-xs sm:text-sm text-gray-500">待办任务</p>
-                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="taskPendingCount">0项</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 border-l-4 border-blue-500 transition-all duration-300 hover:shadow-xl">
-            <div class="flex items-center">
-              <div class="bg-blue-100 p-2 sm:p-3 rounded-full mr-3 sm:mr-4">
-                <i class="fa fa-spinner text-blue-600 text-lg sm:text-xl"></i>
-              </div>
-              <div>
-                <p class="text-xs sm:text-sm text-gray-500">进行中</p>
-                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="taskInProgressCount">0项</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 border-l-4 border-green-500 transition-all duration-300 hover:shadow-xl">
-            <div class="flex items-center">
-              <div class="bg-green-100 p-2 sm:p-3 rounded-full mr-3 sm:mr-4">
-                <i class="fa fa-check-circle text-green-600 text-lg sm:text-xl"></i>
-              </div>
-              <div>
-                <p class="text-xs sm:text-sm text-gray-500">已完成</p>
-                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="taskCompletedCount">0项</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 border-l-4 border-red-500 transition-all duration-300 hover:shadow-xl">
-            <div class="flex items-center">
-              <div class="bg-red-100 p-2 sm:p-3 rounded-full mr-3 sm:mr-4">
-                <i class="fa fa-exclamation-triangle text-red-600 text-lg sm:text-xl"></i>
-              </div>
-              <div>
-                <p class="text-xs sm:text-sm text-gray-500">逾期家务</p>
-                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="taskOverdueCount">0项</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 图表区域 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-8">
-          <!-- 任务完成趋势图 -->
-          <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6">
-            <div class="flex justify-between items-center mb-3 sm:mb-4">
-              <h3 class="text-base sm:text-lg font-semibold text-gray-800">任务完成趋势</h3>
-              <div class="flex space-x-1 sm:space-x-2">
-                <button class="time-filter-task px-2 sm:px-3 py-1 rounded-md text-xs font-medium bg-orange-600 text-white" data-period="7">7天</button>
-                <button class="time-filter-task px-2 sm:px-3 py-1 rounded-md text-xs font-medium bg-gray-200 text-gray-700" data-period="30">30天</button>
-              </div>
-            </div>
-            <div class="h-56 sm:h-64">
-              <canvas id="taskTrendChart"></canvas>
-            </div>
-          </div>
-
-          <!-- 任务优先级分布 -->
-          <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6">
-            <h3 class="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">任务优先级分布</h3>
-            <div class="h-56 sm:h-64">
-              <canvas id="taskPriorityChart"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- 最近任务 -->
-        <div class="bg-white rounded-xl shadow-lg p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold text-gray-800">最近任务</h3>
-            <button id="viewAllTasksBtn" class="text-orange-600 hover:text-orange-700 text-sm font-medium flex items-center">
-              查看全部 <i class="fa fa-chevron-right ml-1 text-xs"></i>
-            </button>
-          </div>
-          <div id="recentTasks" class="space-y-4">
-            <div class="text-center py-8 text-gray-500">
-              <i class="fa fa-tasks text-4xl mb-2 text-gray-300"></i>
-              <p>暂无任务</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 待办任务 -->
-      <div id="task-pending-tab-content" class="tab-content hidden animate-fade-in">
-        <div class="mb-6 flex justify-between items-center">
-          <h3 class="text-xl font-semibold text-gray-800">待办任务</h3>
-          <button id="addPendingTaskBtn" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-all duration-300 flex items-center shadow-lg">
-            <i class="fa fa-plus mr-2"></i> 添加任务
-          </button>
-        </div>
-
-        <!-- 筛选和搜索栏 -->
-        <div class="bg-white rounded-xl shadow-lg p-4 mb-6">
-          <div class="flex flex-col md:flex-row gap-4">
-            <div class="flex-1">
-              <input type="text" id="pendingTaskSearchInput" placeholder="搜索任务..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-            </div>
-            <div class="flex gap-2">
-              <select id="pendingTaskFilterPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                <option value="all">全部优先级</option>
-                <option value="high">高优先级</option>
-                <option value="medium">中优先级</option>
-                <option value="low">低优先级</option>
-              </select>
-              <select id="pendingTaskFilterTag" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                <option value="all">全部标签</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 待办任务列表 -->
-        <div id="pendingTasksContainer" class="space-y-4">
-          <div class="text-center py-12 text-gray-500">
-            <i class="fa fa-list-ul text-5xl mb-4 text-gray-300"></i>
-            <p class="text-lg">暂无待办任务</p>
-            <p class="text-sm mt-2">点击"添加任务"开始创建您的第一个任务</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 进行中任务 -->
-      <div id="task-inprogress-tab-content" class="tab-content hidden animate-fade-in">
-        <div class="mb-6 flex justify-between items-center">
-          <h3 class="text-xl font-semibold text-gray-800">进行中任务</h3>
-        </div>
-
-        <!-- 筛选和搜索栏 -->
-        <div class="bg-white rounded-xl shadow-lg p-4 mb-6">
-          <div class="flex flex-col md:flex-row gap-4">
-            <div class="flex-1">
-              <input type="text" id="inprogressTaskSearchInput" placeholder="搜索任务..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-            </div>
-            <div class="flex gap-2">
-              <select id="inprogressTaskFilterPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                <option value="all">全部优先级</option>
-                <option value="high">高优先级</option>
-                <option value="medium">中优先级</option>
-                <option value="low">低优先级</option>
-              </select>
-              <select id="inprogressTaskFilterTag" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                <option value="all">全部标签</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 进行中任务列表 -->
-        <div id="inprogressTasksContainer" class="space-y-4">
-          <div class="text-center py-12 text-gray-500">
-            <i class="fa fa-spinner text-5xl mb-4 text-gray-300"></i>
-            <p class="text-lg">暂无进行中的任务</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 已完成任务 -->
-      <div id="task-completed-tab-content" class="tab-content hidden animate-fade-in">
-        <div class="mb-6 flex justify-between items-center">
-          <h3 class="text-xl font-semibold text-gray-800">已完成任务</h3>
-        </div>
-
-        <!-- 筛选和搜索栏 -->
-        <div class="bg-white rounded-xl shadow-lg p-4 mb-6">
-          <div class="flex flex-col md:flex-row gap-4">
-            <div class="flex-1">
-              <input type="text" id="completedTaskSearchInput" placeholder="搜索任务..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-            </div>
-            <div class="flex gap-2">
-              <select id="completedTaskFilterPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                <option value="all">全部优先级</option>
-                <option value="high">高优先级</option>
-                <option value="medium">中优先级</option>
-                <option value="low">低优先级</option>
-              </select>
-              <select id="completedTaskFilterTag" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                <option value="all">全部标签</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 已完成任务列表 -->
-        <div id="completedTasksContainer" class="space-y-4">
-          <div class="text-center py-12 text-gray-500">
-            <i class="fa fa-check-circle text-5xl mb-4 text-gray-300"></i>
-            <p class="text-lg">暂无已完成的任务</p>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-
   <!-- 家务管理模块 -->
   <div id="housework-module" class="hidden">
     <!-- 顶部导航栏 -->
@@ -7149,8 +6868,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     };
 
     // 初始化学习管理模块
-    function initStudyModule() {
-      loadStudyData();
+    async function initStudyModule() {
+      await loadStudyData();
       setupStudyEventListeners();
       updateStudyDashboard();
       renderStudyPlans();
@@ -7169,8 +6888,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         homeActiveCourses.textContent = `${activeCourses.length}门`;
       }
 
-      // 更新首页的待办家务数量
-      const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
+      // 更新首页的待办家务数量（排除逾期）
+      const today = new Date();
+      const pendingHousework = houseworkData.tasks.filter(t => 
+        t.status === 'pending' && 
+        (!t.dueDate || new Date(t.dueDate) >= today)
+      ).length;
       const homePendingHousework = document.getElementById('homePendingHousework');
       if (homePendingHousework) {
         homePendingHousework.textContent = `${pendingHousework}项`;
@@ -7325,6 +7048,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 添加筛选事件
         monthFilter.addEventListener('change', renderStudyRecords);
       }
+      
+      // 初始化学习记录列表
+      renderStudyRecords();
+      renderRecentStudyRecords();
     }
 
     // 富文本编辑器格式化函数
@@ -8565,8 +8292,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         homeActiveCourses.textContent = `${activeCourses.length}门`;
       }
 
-      // 同时更新首页的待办家务数量
-      const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
+      // 同时更新首页的待办家务数量（排除逾期）
+      const today = new Date();
+      const pendingHousework = houseworkData.tasks.filter(t => 
+        t.status === 'pending' && 
+        (!t.dueDate || new Date(t.dueDate) >= today)
+      ).length;
       const homePendingHousework = document.getElementById('homePendingHousework');
       if (homePendingHousework) {
         homePendingHousework.textContent = `${pendingHousework}项`;
@@ -10247,8 +9978,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     let houseworkCompletionHistoryChart = null;
 
     // 初始化家务管理模块
-    function initHouseworkModule() {
-      loadHouseworkData();
+    async function initHouseworkModule() {
+      await loadHouseworkData();
       setupHouseworkEventListeners();
       updateHouseworkDashboard();
       renderPendingHousework();
@@ -10394,12 +10125,23 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     // 更新家务概览
     function updateHouseworkDashboard() {
-      const pendingCount = houseworkData.tasks.filter(t => t.status === 'pending').length;
-      const inProgressCount = houseworkData.tasks.filter(t => t.status === 'in-progress').length;
+      const today = new Date();
+      
+      // 待办家务：状态为pending且未逾期
+      const pendingCount = houseworkData.tasks.filter(t => 
+        t.status === 'pending' && 
+        (!t.dueDate || new Date(t.dueDate) >= today)
+      ).length;
+      
+      // 进行中家务：状态为in-progress且未逾期
+      const inProgressCount = houseworkData.tasks.filter(t => 
+        t.status === 'in-progress' && 
+        (!t.dueDate || new Date(t.dueDate) >= today)
+      ).length;
+      
       const completedCount = houseworkData.tasks.filter(t => t.status === 'completed').length;
 
       // 计算逾期家务
-      const today = new Date();
       const overdueCount = houseworkData.tasks.filter(t => {
         if (t.status !== 'completed' && t.dueDate) {
           return new Date(t.dueDate) < today;
@@ -10761,13 +10503,213 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
     }
 
-    // 渲染已完成家务
+    // 渲染已完成家务（采用学习记录列表样式）
     function renderCompletedHousework() {
       const container = document.getElementById('completedHouseworkContainer');
       if (!container) return;
 
-      const filteredTasks = filterHousework('completed', 'completedHouseworkSearchInput', 'completedHouseworkFilterPriority', 'completedHouseworkFilterType', 'completedHouseworkFilterOverdue');
-      renderHouseworkList(container, filteredTasks, 'completed');
+      // 获取筛选条件
+      const searchQuery = document.getElementById('completedHouseworkSearchInput')?.value.toLowerCase() || '';
+      const priorityFilter = document.getElementById('completedHouseworkFilterPriority')?.value || 'all';
+      const typeFilter = document.getElementById('completedHouseworkFilterType')?.value || 'all';
+
+      // 筛选已完成的家务
+      let filteredTasks = houseworkData.tasks.filter(task => {
+        if (task.status !== 'completed') return false;
+
+        const matchesSearch = task.title.toLowerCase().includes(searchQuery) ||
+                           (task.description && task.description.toLowerCase().includes(searchQuery));
+
+        const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+        const matchesType = typeFilter === 'all' || task.type === typeFilter;
+
+        return matchesSearch && matchesPriority && matchesType;
+      });
+
+      // 按完成时间倒序排序
+      filteredTasks.sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+
+      if (filteredTasks.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-gray-500">
+            <i class="fa fa-check-circle text-4xl mb-2 text-gray-300"></i>
+            <p>暂无已完成的家务</p>
+          </div>
+        `;
+        return;
+      }
+
+      // 按年、月、日分组
+      const groupedTasks = {};
+
+      filteredTasks.forEach(task => {
+        if (!task.completedAt) return;
+
+        const date = task.completedAt.split('T')[0]; // 提取日期部分 YYYY-MM-DD
+        const [year, month] = date.split('-');
+        const monthKey = `${year}-${month}`;
+
+        if (!groupedTasks[monthKey]) {
+          groupedTasks[monthKey] = {
+            month: monthKey,
+            monthName: getMonthName(month),
+            year: year,
+            days: {},
+            totalCount: 0
+          };
+        }
+
+        if (!groupedTasks[monthKey].days[date]) {
+          groupedTasks[monthKey].days[date] = {
+            date: date,
+            dayName: getDayName(date),
+            tasks: []
+          };
+        }
+
+        groupedTasks[monthKey].days[date].tasks.push(task);
+        groupedTasks[monthKey].totalCount++;
+      });
+
+      // 类型和优先级名称映射
+      const typeNames = {
+        cleaning: '清洁',
+        cooking: '烹饪',
+        laundry: '洗衣',
+        shopping: '购物',
+        other: '其他'
+      };
+
+      const priorityColors = {
+        high: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
+        medium: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+        low: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' }
+      };
+
+      // 生成卡片网格显示的 HTML
+      let html = '';
+
+      // 获取当前日期
+      const now = new Date();
+      const currentYear = now.getFullYear().toString();
+      const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+      const currentDate = now.toISOString().split('T')[0];
+
+      // 按月份倒序
+      Object.keys(groupedTasks).sort((a, b) => b.localeCompare(a)).forEach(monthKey => {
+        const monthData = groupedTasks[monthKey];
+
+        // 判断是否是本月
+        const isCurrentMonth = monthData.year === currentYear && monthKey === `${currentYear}-${currentMonth}`;
+
+        html += `
+          <div class="mb-8">
+            <!-- 月份标题 -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="bg-gradient-to-r from-teal-500 to-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center">
+                <i class="fa fa-calendar-check mr-2 text-lg"></i>
+                <span class="font-bold text-lg">${monthData.year}年 ${monthData.monthName}</span>
+                ${isCurrentMonth ? '<span class="ml-2 bg-white/20 text-white text-xs px-2 py-1 rounded-full">本月</span>' : ''}
+              </div>
+              <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                <span class="text-sm text-gray-500">完成数量：</span>
+                <span class="font-bold text-teal-600">${monthData.totalCount}</span>
+                <span class="text-sm text-gray-500"> 件</span>
+              </div>
+            </div>
+
+            <!-- 卡片网格 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        `;
+
+        // 按日期倒序
+        Object.keys(monthData.days).sort((a, b) => b.localeCompare(a)).forEach(dayKey => {
+          const dayData = monthData.days[dayKey];
+
+          // 判断是否是今日
+          const isToday = dayData.date === currentDate;
+
+          html += `
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-lg hover:border-teal-300 transition-all duration-300 group">
+              <!-- 卡片头部：日期和星期 -->
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                  <div class="bg-gradient-to-br from-teal-500 to-emerald-600 text-white px-3 py-1.5 rounded-lg shadow-md">
+                    <div class="text-xs opacity-90">${dayData.date.slice(0, 4)}年</div>
+                    <div class="text-lg font-bold">${dayData.date.slice(5)}</div>
+                  </div>
+                  ${isToday ? '<span class="bg-teal-100 text-teal-600 text-xs px-2 py-1 rounded-full">今日</span>' : ''}
+                  <div class="text-xs text-gray-500">${dayData.dayName}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-xs text-gray-500">当日完成</div>
+                  <div class="text-lg font-bold text-teal-600">${dayData.tasks.length} <span class="text-xs font-normal">件</span></div>
+                </div>
+              </div>
+
+              <!-- 当天的家务记录列表 -->
+              <div class="space-y-3">
+          `;
+
+          dayData.tasks.forEach(task => {
+            const colors = priorityColors[task.priority] || priorityColors.low;
+            const typeName = typeNames[task.type] || '其他';
+
+            html += `
+              <div class="border border-gray-100 rounded-lg p-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <!-- 家务标题和操作 -->
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="bg-teal-100 p-1.5 rounded-lg">
+                    <i class="fa fa-check text-teal-600 text-sm"></i>
+                  </div>
+                  <span class="font-semibold text-gray-800 text-sm flex-1">${task.title}</span>
+                  <button onclick="deleteHousework('${task.id}')" class="text-gray-400 hover:text-red-600 p-1">
+                    <i class="fa fa-trash text-xs"></i>
+                  </button>
+                </div>
+
+                <!-- 类型和优先级标签 -->
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="px-2 py-0.5 bg-teal-50 text-teal-600 text-xs rounded-full border border-teal-100">
+                    <i class="fa fa-tag mr-1"></i>${typeName}
+                  </span>
+                  <span class="px-2 py-0.5 ${colors.bg} ${colors.text} text-xs rounded-full border ${colors.border}">
+                    ${task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}优先级
+                  </span>
+                </div>
+
+                <!-- 完成时间 -->
+                <div class="flex items-center gap-2 text-xs text-gray-600">
+                  <i class="fa fa-clock-o text-teal-500"></i>
+                  <span>完成于 ${task.completedAt ? task.completedAt.split('T')[1].slice(0, 5) : '--:--'}</span>
+                </div>
+
+                <!-- 描述 -->
+                ${task.description ? `
+                  <div class="text-xs text-gray-700 bg-white rounded p-2 border border-gray-100 mt-2">
+                    <div class="flex items-start gap-1">
+                      <i class="fa fa-align-left text-gray-400 mt-0.5"></i>
+                      <span class="line-clamp-2">${task.description}</span>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          });
+
+          html += `
+              </div>
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
     }
 
     // 渲染逾期家务
@@ -10825,13 +10767,25 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return;
       }
 
-      // 计算逾期天数
+      // 计算逾期时间
       const now = new Date();
       container.innerHTML = overdueTasks.map(task => {
         const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-        const daysOverdue = dueDate ? Math.floor((now - dueDate) / (1000 * 60 * 60 * 24)) : 0;
+        let overdueText = '';
         
-        return createOverdueHouseworkElement(task, daysOverdue);
+        if (dueDate) {
+          const diffMs = now - dueDate;
+          const hoursOverdue = Math.floor(diffMs / (1000 * 60 * 60));
+          const daysOverdue = Math.floor(hoursOverdue / 24);
+          
+          if (daysOverdue < 1) {
+            overdueText = `逾期 ${hoursOverdue} 小时`;
+          } else {
+            overdueText = `逾期 ${daysOverdue} 天`;
+          }
+        }
+        
+        return createOverdueHouseworkElement(task, overdueText);
       }).join('');
 
       // 添加事件监听器
@@ -10894,7 +10848,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <div class="flex items-center gap-2 mb-2">
                   <h4 class="text-lg font-semibold ${colors.text}">${task.title}</h4>
                   <span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
-                    <i class="fa fa-clock-o mr-1"></i>逾期 ${daysOverdue} 天
+                    <i class="fa fa-clock-o mr-1"></i>${daysOverdue}
                   </span>
                 </div>
                 ${task.description ? `<p class="text-gray-600 text-sm mb-3">${task.description}</p>` : ''}
@@ -11378,847 +11332,5 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     // 初始化家务管理模块
     document.addEventListener('DOMContentLoaded', initHouseworkModule);
-  </script>
-</body></html>
-  <script>
-    // 任务管理数据
-    const taskData = {
-      tasks: [],
-      tags: []
-    };
-
-    // 图表实例
-    let taskTrendChart = null;
-    let taskPriorityChart = null;
-    let taskCompletionHistoryChart = null;
-
-    // 初始化任务管理模块
-    function initTaskModule() {
-      loadTaskData();
-      setupTaskEventListeners();
-      updateTaskDashboard();
-      renderPendingTasks();
-      renderInProgressTasks();
-      renderCompletedTasks();
-      initTaskCharts();
-      updateTaskStatistics();
-    }
-
-    // 加载任务数据
-    async function loadTaskData() {
-      const savedData = await AppHelper.loadData('taskData', {
-        tasks: [],
-        tags: []
-      });
-
-      // 确保数据结构的完整性
-      taskData.tasks = Array.isArray(savedData.tasks) ? savedData.tasks : [];
-      taskData.tags = Array.isArray(savedData.tags) ? savedData.tags : [];
-    }
-
-    // 保存任务数据到云存储
-    async function saveTaskData() {
-      const result = await AppHelper.saveData('taskData', {
-        tasks: taskData.tasks,
-        tags: taskData.tags
-      });
-      
-      return result;
-    }
-
-    // 设置事件监听器
-    function setupTaskEventListeners() {
-      // 标签页切换
-      document.querySelectorAll('#taskTabNav button').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const tab = this.dataset.tab;
-          switchTaskTab(tab);
-        });
-      });
-
-      // 快速添加任务
-      document.getElementById('quickAddTaskBtn')?.addEventListener('click', () => openTaskModal());
-
-      // 添加待办任务
-      document.getElementById('addPendingTaskBtn')?.addEventListener('click', () => openTaskModal());
-
-      // 任务表单提交
-      document.getElementById('taskForm')?.addEventListener('submit', saveTask);
-
-      // 待办任务搜索和筛选
-      document.getElementById('pendingTaskSearchInput')?.addEventListener('input', () => renderPendingTasks());
-      document.getElementById('pendingTaskFilterPriority')?.addEventListener('change', () => renderPendingTasks());
-      document.getElementById('pendingTaskFilterTag')?.addEventListener('change', () => renderPendingTasks());
-
-      // 进行中任务搜索和筛选
-      document.getElementById('inprogressTaskSearchInput')?.addEventListener('input', () => renderInProgressTasks());
-      document.getElementById('inprogressTaskFilterPriority')?.addEventListener('change', () => renderInProgressTasks());
-      document.getElementById('inprogressTaskFilterTag')?.addEventListener('change', () => renderInProgressTasks());
-
-      // 已完成任务搜索和筛选
-      document.getElementById('completedTaskSearchInput')?.addEventListener('input', () => renderCompletedTasks());
-      document.getElementById('completedTaskFilterPriority')?.addEventListener('change', () => renderCompletedTasks());
-      document.getElementById('completedTaskFilterTag')?.addEventListener('change', () => renderCompletedTasks());
-
-      // 查看全部任务
-      document.getElementById('viewAllTasksBtn')?.addEventListener('click', () => switchTaskTab('pending'));
-
-      // 任务趋势图表筛选
-      document.querySelectorAll('.time-filter-task').forEach(btn => {
-        btn.addEventListener('click', function() {
-          document.querySelectorAll('.time-filter-task').forEach(b => {
-            b.classList.remove('bg-orange-600', 'text-white');
-            b.classList.add('bg-gray-200', 'text-gray-700');
-          });
-          this.classList.remove('bg-gray-200', 'text-gray-700');
-          this.classList.add('bg-orange-600', 'text-white');
-          updateTaskTrendChart(parseInt(this.dataset.period));
-        });
-      });
-
-      // 导出/导入
-      document.getElementById('exportTaskDataBtn')?.addEventListener('click', exportTaskData);
-      document.getElementById('importTaskDataBtn')?.addEventListener('click', () => {
-        document.getElementById('importTaskDataInput').click();
-      });
-      document.getElementById('importTaskDataInput')?.addEventListener('change', importTaskData);
-    }
-
-    // 切换标签页
-    function switchTaskTab(tab) {
-      AppHelper.switchTab(tab, '#taskTabNav button', 'task', 'active', 'border-orange-600', 'text-orange-600');
-
-      // 切换到相应标签时更新数据
-      if (tab === 'dashboard') {
-        updateTaskDashboard();
-        renderRecentTasks();
-      } else if (tab === 'statistics') {
-        updateTaskStatistics();
-      }
-    }
-
-    // 更新任务概览
-    function updateTaskDashboard() {
-      const pendingCount = taskData.tasks.filter(t => t.status === 'pending').length;
-      const inProgressCount = taskData.tasks.filter(t => t.status === 'in-progress').length;
-      const completedCount = taskData.tasks.filter(t => t.status === 'completed').length;
-
-      // 计算逾期家务
-      const today = new Date();
-      const overdueCount = taskData.tasks.filter(t => {
-        if (t.status !== 'completed' && t.dueDate) {
-          return new Date(t.dueDate) < today;
-        }
-        return false;
-      }).length;
-
-      document.getElementById('taskPendingCount').textContent = `${pendingCount}项`;
-      document.getElementById('taskInProgressCount').textContent = `${inProgressCount}项`;
-      document.getElementById('taskCompletedCount').textContent = `${completedCount}项`;
-      document.getElementById('taskOverdueCount').textContent = `${overdueCount}项`;
-    }
-
-    // 更新任务统计
-    function updateTaskStatistics() {
-      const totalTasks = taskData.tasks.length;
-      const completedTasks = taskData.tasks.filter(t => t.status === 'completed').length;
-      const completionRate = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(0) : 0;
-
-      document.getElementById('totalTasksCount').textContent = totalTasks;
-      document.getElementById('completionRate').textContent = `${completionRate}%`;
-
-      // 计算连续完成任务天数
-      const streak = calculateCompletionStreak();
-      document.getElementById('streakDays').textContent = streak;
-
-      // 更新标签统计
-      updateTagStatistics();
-
-      // 更新图表
-      updateTaskCharts();
-    }
-
-    // 计算连续完成任务天数
-    function calculateCompletionStreak() {
-      const completedTasks = taskData.tasks
-        .filter(t => t.status === 'completed' && t.completedAt)
-        .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
-
-      if (completedTasks.length === 0) return 0;
-
-      const dates = [...new Set(completedTasks.map(t => t.completedAt.split('T')[0]))].sort().reverse();
-      let streak = 0;
-      let currentDate = new Date();
-      
-      for (let i = 0; i < dates.length; i++) {
-        const taskDate = new Date(dates[i]);
-        const diffDays = Math.floor((currentDate - taskDate) / (1000 * 60 * 60 * 24));
-        
-        if (diffDays === i) {
-          streak++;
-        } else if (i === 0 && diffDays === 1) {
-          currentDate = taskDate;
-          streak++;
-        } else {
-          break;
-        }
-      }
-      
-      return streak;
-    }
-
-    // 更新标签统计
-    function updateTagStatistics() {
-      const container = document.getElementById('tagStatistics');
-      if (!container) return;
-
-      // 统计每个标签的任务数
-      const tagStats = {};
-      taskData.tasks.forEach(task => {
-        (task.tags || []).forEach(tag => {
-          if (!tagStats[tag]) {
-            tagStats[tag] = { total: 0, completed: 0 };
-          }
-          tagStats[tag].total++;
-          if (task.status === 'completed') {
-            tagStats[tag].completed++;
-          }
-        });
-      });
-
-      if (Object.keys(tagStats).length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-8 text-gray-500">
-            <i class="fa fa-tags text-4xl mb-2 text-gray-300"></i>
-            <p>暂无标签统计</p>
-          </div>
-        `;
-        return;
-      }
-
-      container.innerHTML = Object.entries(tagStats).map(([tag, stats]) => {
-        const percentage = stats.total > 0 ? ((stats.completed / stats.total) * 100).toFixed(0) : 0;
-        return `
-          <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div class="flex items-center">
-              <span class="inline-flex items-center px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-md mr-3">#${tag}</span>
-              <span class="text-sm text-gray-600">${stats.completed}/${stats.total} 已完成</span>
-            </div>
-            <div class="w-32">
-              <div class="w-full bg-gray-200 rounded-full h-2">
-                <div class="bg-orange-600 h-2 rounded-full" style="width: ${percentage}%"></div>
-              </div>
-              <span class="text-xs text-gray-500">${percentage}%</span>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // 打开任务模态框
-    function openTaskModal(taskId = null) {
-      const modal = document.getElementById('addTaskModal');
-      const title = document.getElementById('taskModalTitle');
-      const form = document.getElementById('taskForm');
-
-      form.reset();
-
-      if (taskId) {
-        const task = taskData.tasks.find(t => t.id === taskId);
-        if (task) {
-          title.textContent = '编辑任务';
-          document.getElementById('taskId').value = task.id;
-          document.getElementById('taskTitle').value = task.title;
-          document.getElementById('taskDescription').value = task.description || '';
-          document.getElementById('taskDueDate').value = task.dueDate || '';
-          document.getElementById('taskPriority').value = task.priority || 'low';
-          document.getElementById('taskStatus').value = task.status || 'pending';
-          document.getElementById('taskTag').value = (task.tags || []).join(', ');
-        }
-      } else {
-        title.textContent = '添加任务';
-        document.getElementById('taskId').value = '';
-        document.getElementById('taskStatus').value = 'pending';
-      }
-
-      modal.classList.remove('hidden');
-    }
-
-    // 保存任务
-    async function saveTask(e) {
-      e.preventDefault();
-
-      const id = document.getElementById('taskId').value;
-      const newTaskData = {
-        id: id || Date.now().toString(),
-        title: document.getElementById('taskTitle').value,
-        description: document.getElementById('taskDescription').value,
-        dueDate: document.getElementById('taskDueDate').value,
-        priority: document.getElementById('taskPriority').value,
-        status: document.getElementById('taskStatus').value,
-        tags: document.getElementById('taskTag').value.split(',').map(t => t.trim()).filter(t => t),
-        createdAt: id ? taskData.tasks.find(t => t.id === id)?.createdAt : new Date().toISOString(),
-        completedAt: id ? taskData.tasks.find(t => t.id === id)?.completedAt : null
-      };
-
-      if (id) {
-        const index = taskData.tasks.findIndex(t => t.id === id);
-        if (index !== -1) {
-          taskData.tasks[index] = newTaskData;
-        }
-      } else {
-        taskData.tasks.push(newTaskData);
-      }
-
-      await saveTaskData();
-      closeTaskModal('addTaskModal');
-      
-      // 更新所有相关数据
-      updateTaskDashboard();
-      renderPendingTasks();
-      renderInProgressTasks();
-      renderCompletedTasks();
-      renderRecentTasks();
-      updateTaskStatistics();
-      
-      AppHelper.showNotification('成功', '任务已保存', 'success');
-    }
-
-    // 删除任务
-    async function deleteTask(id) {
-      if (confirm('确定要删除这个任务吗？')) {
-        taskData.tasks = taskData.tasks.filter(t => t.id !== id);
-        await saveTaskData();
-        updateTaskDashboard();
-        renderPendingTasks();
-        renderInProgressTasks();
-        renderCompletedTasks();
-        renderRecentTasks();
-        updateTaskStatistics();
-      }
-    }
-
-    // 标记任务完成
-    async function toggleTaskComplete(id) {
-      const task = taskData.tasks.find(t => t.id === id);
-      if (task) {
-        if (task.status === 'completed') {
-          task.status = 'pending';
-          task.completedAt = null;
-        } else {
-          task.status = 'completed';
-          task.completedAt = new Date().toISOString();
-        }
-        await saveTaskData();
-        updateTaskDashboard();
-        renderPendingTasks();
-        renderInProgressTasks();
-        renderCompletedTasks();
-        renderRecentTasks();
-        updateTaskStatistics();
-      }
-    }
-
-    // 渲染待办任务
-    function renderPendingTasks() {
-      const container = document.getElementById('pendingTasksContainer');
-      if (!container) return;
-
-      const filteredTasks = filterTasks('pending', 'pendingTaskSearchInput', 'pendingTaskFilterPriority', 'pendingTaskFilterTag');
-      renderTaskList(container, filteredTasks, 'pending');
-    }
-
-    // 渲染进行中任务
-    function renderInProgressTasks() {
-      const container = document.getElementById('inprogressTasksContainer');
-      if (!container) return;
-
-      const filteredTasks = filterTasks('in-progress', 'inprogressTaskSearchInput', 'inprogressTaskFilterPriority', 'inprogressTaskFilterTag');
-      renderTaskList(container, filteredTasks, 'in-progress');
-    }
-
-    // 渲染已完成任务
-    function renderCompletedTasks() {
-      const container = document.getElementById('completedTasksContainer');
-      if (!container) return;
-
-      const filteredTasks = filterTasks('completed', 'completedTaskSearchInput', 'completedTaskFilterPriority', 'completedTaskFilterTag');
-      renderTaskList(container, filteredTasks, 'completed');
-    }
-
-    // 筛选任务
-    function filterTasks(status, searchInputId, priorityFilterId, tagFilterId) {
-      const searchQuery = document.getElementById(searchInputId)?.value.toLowerCase() || '';
-      const priorityFilter = document.getElementById(priorityFilterId)?.value || 'all';
-      const tagFilter = document.getElementById(tagFilterId)?.value || 'all';
-
-      return taskData.tasks.filter(task => {
-        if (task.status !== status) return false;
-
-        const matchesSearch = task.title.toLowerCase().includes(searchQuery) ||
-                           (task.description && task.description.toLowerCase().includes(searchQuery));
-
-        const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
-        const matchesTag = tagFilter === 'all' || (task.tags && task.tags.includes(tagFilter));
-
-        return matchesSearch && matchesPriority && matchesTag;
-      }).sort((a, b) => {
-        const priorityOrder = { high: 0, medium: 1, low: 2 };
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
-      });
-    }
-
-    // 渲染任务列表
-    function renderTaskList(container, tasks, status) {
-      if (tasks.length === 0) {
-        const emptyMessages = {
-          'pending': '暂无待办任务',
-          'in-progress': '暂无进行中的任务',
-          'completed': '暂无已完成的任务'
-        };
-        
-        container.innerHTML = `
-          <div class="text-center py-12 text-gray-500">
-            <i class="fa fa-tasks text-5xl mb-4 text-gray-300"></i>
-            <p class="text-lg">${emptyMessages[status]}</p>
-          </div>
-        `;
-        return;
-      }
-
-      container.innerHTML = tasks.map(task => createTaskElement(task)).join('');
-
-      // 添加事件监听器
-      document.querySelectorAll('.edit-task-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openTaskModal(btn.dataset.taskId);
-        });
-      });
-
-      document.querySelectorAll('.delete-task-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          deleteTask(btn.dataset.taskId);
-        });
-      });
-
-      document.querySelectorAll('.toggle-complete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleTaskComplete(btn.dataset.taskId);
-        });
-      });
-    }
-
-    // 渲染最近任务
-    function renderRecentTasks() {
-      const container = document.getElementById('recentTasks');
-      if (!container) return;
-
-      const recentTasks = [...taskData.tasks]
-        .filter(t => t.status !== 'completed')
-        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-        .slice(0, 5);
-
-      if (recentTasks.length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-8 text-gray-500">
-            <i class="fa fa-tasks text-4xl mb-2 text-gray-300"></i>
-            <p>暂无任务</p>
-          </div>
-        `;
-        return;
-      }
-
-      container.innerHTML = recentTasks.map(task => {
-        const priorityColors = {
-          high: 'text-red-600',
-          medium: 'text-blue-600',
-          low: 'text-green-600'
-        };
-        const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
-        
-        return `
-          <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-            <div class="flex items-center flex-1">
-              <button class="toggle-complete-btn mr-3" data-task-id="${task.id}">
-                <i class="fa fa-circle-o text-gray-400 text-lg hover:text-orange-600"></i>
-              </button>
-              <div class="flex-1">
-                <p class="font-medium text-gray-800">${task.title}</p>
-                <p class="text-sm text-gray-500">
-                  ${task.dueDate ? `<i class="fa fa-calendar mr-1"></i>${task.dueDate}` : ''}
-                  ${isOverdue ? '<span class="text-red-600 ml-2"><i class="fa fa-exclamation-triangle mr-1"></i>已逾期</span>' : ''}
-                </p>
-              </div>
-            </div>
-            <span class="px-2 py-1 text-xs rounded-full ${priorityColors[task.priority] || 'text-gray-600'}">
-              ${task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
-            </span>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // 创建任务元素
-    function createTaskElement(task) {
-      const priorityColors = {
-        high: { border: 'border-red-500', bg: 'bg-red-50', text: 'text-red-800', badge: 'bg-red-100 text-red-700' },
-        medium: { border: 'border-blue-500', bg: 'bg-blue-50', text: 'text-blue-800', badge: 'bg-blue-100 text-blue-700' },
-        low: { border: 'border-green-500', bg: 'bg-green-50', text: 'text-green-800', badge: 'bg-green-100 text-green-700' }
-      };
-
-      const colors = priorityColors[task.priority] || priorityColors.low;
-      const isCompleted = task.status === 'completed';
-      const isOverdue = !isCompleted && task.dueDate && new Date(task.dueDate) < new Date();
-      const statusBadge = {
-        pending: '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">待办</span>',
-        'in-progress': '<span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">进行中</span>',
-        completed: '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已完成</span>'
-      };
-
-      const tags = (task.tags || []).map(tag =>
-        `<span class="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-md mr-1 mb-1">#${tag}</span>`
-      ).join('');
-
-      return `
-        <div class="bg-white rounded-xl shadow-lg border-l-4 ${colors.border} p-6 transition-all duration-300 hover:shadow-xl ${isCompleted ? 'opacity-60' : ''}">
-          <div class="flex items-start justify-between">
-            <div class="flex items-start flex-1">
-              <button class="toggle-complete-btn mt-1 mr-3" data-task-id="${task.id}">
-                <i class="fa ${isCompleted ? 'fa-check-circle text-green-500' : 'fa-circle-o text-gray-400'} text-xl hover:scale-110 transition-transform"></i>
-              </button>
-              <div class="flex-1">
-                <h4 class="text-lg font-semibold ${isCompleted ? 'line-through text-gray-400' : colors.text} mb-2">${task.title}</h4>
-                ${task.description ? `<p class="text-gray-600 text-sm mb-3">${task.description}</p>` : ''}
-                <div class="flex flex-wrap items-center gap-2 mb-3">
-                  ${statusBadge[task.status]}
-                  <span class="px-2 py-1 ${colors.badge} text-xs rounded-full">${task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}优先级</span>
-                  ${isOverdue ? '<span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full"><i class="fa fa-exclamation-triangle mr-1"></i>已逾期</span>' : ''}
-                </div>
-                ${tags ? `<div class="flex flex-wrap mt-2">${tags}</div>` : ''}
-                <div class="flex items-center text-xs text-gray-500 mt-2 space-x-4">
-                  ${task.createdAt ? `<span><i class="fa fa-clock-o mr-1"></i>创建: ${task.createdAt}</span>` : ''}
-                  ${task.dueDate ? `<span><i class="fa fa-calendar mr-1"></i>截止: ${task.dueDate}</span>` : ''}
-                </div>
-              </div>
-            </div>
-            <div class="flex space-x-2 ml-4">
-              <button class="edit-task-btn p-2 text-gray-400 hover:text-orange-600 transition-colors" data-task-id="${task.id}" title="编辑">
-                <i class="fa fa-edit"></i>
-              </button>
-              <button class="delete-task-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-task-id="${task.id}" title="删除">
-                <i class="fa fa-trash"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    // 关闭任务模态框
-    function closeTaskModal(modalId) {
-      AppHelper.closeModal(modalId);
-    }
-
-    // 导出任务数据
-    function exportTaskData() {
-      AppHelper.exportData(taskData, `task-data-${new Date().toISOString().split('T')[0]}.json`);
-    }
-
-    // 导入任务数据
-    function importTaskData(e) {
-      AppHelper.importData(e, async function(importedData) {
-        taskData.tasks = importedData.tasks || [];
-        taskData.tags = importedData.tags || [];
-        await saveTaskData();
-        updateTaskDashboard();
-        renderPendingTasks();
-        renderInProgressTasks();
-        renderCompletedTasks();
-        renderRecentTasks();
-        updateTaskStatistics();
-        AppHelper.showNotification('成功', '任务数据已导入', 'success');
-      });
-    }
-
-    // 初始化任务图表
-    function initTaskCharts() {
-      // 任务趋势图表
-      const trendCtx = document.getElementById('taskTrendChart')?.getContext('2d');
-      if (trendCtx) {
-        taskTrendChart = new Chart(trendCtx, {
-          type: 'line',
-          data: {
-            labels: [],
-            datasets: [{
-              label: '完成任务数',
-              data: [],
-              borderColor: 'rgb(249, 115, 22)',
-              backgroundColor: 'rgba(249, 115, 22, 0.1)',
-              tension: 0.4,
-              fill: true
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false
-              }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  stepSize: 1
-                }
-              }
-            }
-          }
-        });
-        updateTaskTrendChart(7);
-      }
-
-      // 优先级分布图表
-      const priorityCtx = document.getElementById('taskPriorityChart')?.getContext('2d');
-      if (priorityCtx) {
-        taskPriorityChart = new Chart(priorityCtx, {
-          type: 'doughnut',
-          data: {
-            labels: ['高优先级', '中优先级', '低优先级'],
-            datasets: [{
-              data: [0, 0, 0],
-              backgroundColor: [
-                'rgba(239, 68, 68, 0.8)',
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(34, 197, 94, 0.8)'
-              ]
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'bottom'
-              }
-            }
-          }
-        });
-        updateTaskPriorityChart();
-      }
-
-      // 完成历史图表
-      const historyCtx = document.getElementById('taskCompletionHistoryChart')?.getContext('2d');
-      if (historyCtx) {
-        taskCompletionHistoryChart = new Chart(historyCtx, {
-          type: 'bar',
-          data: {
-            labels: [],
-            datasets: [
-              {
-                label: '新增任务',
-                data: [],
-                backgroundColor: 'rgba(249, 115, 22, 0.6)',
-                borderColor: 'rgb(249, 115, 22)',
-                borderWidth: 1
-              },
-              {
-                label: '完成任务',
-                data: [],
-                backgroundColor: 'rgba(34, 197, 94, 0.6)',
-                borderColor: 'rgb(34, 197, 94)',
-                borderWidth: 1
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'bottom'
-              }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  stepSize: 1
-                }
-              }
-            }
-          }
-        });
-        updateTaskCompletionHistoryChart();
-      }
-    }
-
-    // 更新任务趋势图表
-    function updateTaskTrendChart(days) {
-      if (!taskTrendChart) return;
-
-      const labels = [];
-      const data = [];
-      const now = new Date();
-      
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
-        labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
-        
-        const completedOnDay = taskData.tasks.filter(t => {
-          return t.status === 'completed' && 
-                 t.completedAt && 
-                 t.completedAt.startsWith(dateStr);
-        }).length;
-        
-        data.push(completedOnDay);
-      }
-
-      taskTrendChart.data.labels = labels;
-      taskTrendChart.data.datasets[0].data = data;
-      taskTrendChart.update();
-    }
-
-    // 更新优先级分布图表
-    function updateTaskPriorityChart() {
-      if (!taskPriorityChart) return;
-
-      const activeTasks = taskData.tasks.filter(t => t.status !== 'completed');
-      const highPriority = activeTasks.filter(t => t.priority === 'high').length;
-      const mediumPriority = activeTasks.filter(t => t.priority === 'medium').length;
-      const lowPriority = activeTasks.filter(t => t.priority === 'low').length;
-
-      taskPriorityChart.data.datasets[0].data = [highPriority, mediumPriority, lowPriority];
-      taskPriorityChart.update();
-    }
-
-    // 更新完成历史图表
-    function updateTaskCompletionHistoryChart() {
-      if (!taskCompletionHistoryChart) return;
-
-      const labels = [];
-      const addedData = [];
-      const completedData = [];
-      const now = new Date();
-      
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
-        labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
-        
-        const addedOnDay = taskData.tasks.filter(t => t.createdAt.startsWith(dateStr)).length;
-        const completedOnDay = taskData.tasks.filter(t => {
-          return t.status === 'completed' && 
-                 t.completedAt && 
-                 t.completedAt.startsWith(dateStr);
-        }).length;
-        
-        addedData.push(addedOnDay);
-        completedData.push(completedOnDay);
-      }
-
-      taskCompletionHistoryChart.data.labels = labels;
-      taskCompletionHistoryChart.data.datasets[0].data = addedData;
-      taskCompletionHistoryChart.data.datasets[1].data = completedData;
-      taskCompletionHistoryChart.update();
-    }
-
-    // 更新所有图表
-    function updateTaskCharts() {
-      updateTaskTrendChart(7);
-      updateTaskPriorityChart();
-      updateTaskCompletionHistoryChart();
-    }
-
-    // 初始化所有模块和事件监听器
-    // 服务器数据同步已在各模块内部处理
-    
-    // 显示通知
-    function showNotification(message, type = 'info') {
-      // 创建通知元素
-      const notification = document.createElement('div');
-      notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 transform translate-x-full opacity-0`;
-      
-      // 设置样式和图标
-      if (type === 'success') {
-        notification.classList.add('bg-green-500', 'text-white');
-        notification.innerHTML = `<i class="fa fa-check-circle mr-2"></i> ${message}`;
-      } else if (type === 'error') {
-        notification.classList.add('bg-red-500', 'text-white');
-        notification.innerHTML = `<i class="fa fa-exclamation-circle mr-2"></i> ${message}`;
-      } else {
-        notification.classList.add('bg-blue-500', 'text-white');
-        notification.innerHTML = `<i class="fa fa-info-circle mr-2"></i> ${message}`;
-      }
-      
-      // 添加到页面
-      document.body.appendChild(notification);
-      
-      // 显示通知
-      setTimeout(() => {
-        notification.classList.remove('translate-x-full', 'opacity-0');
-      }, 100);
-      
-      // 3秒后隐藏通知
-      setTimeout(() => {
-        notification.classList.add('translate-x-full', 'opacity-0');
-        setTimeout(() => {
-          document.body.removeChild(notification);
-        }, 300);
-      }, 3000);
-    }
-    
-    // ==================== Supabase 共享数据同步（完全自动，无界面提示）====================
-    
-    // 初始化：从云端加载数据
-    async function initSync() {
-      try {
-        // 从 Supabase 拉取最新数据
-        const keys = ['familyFinanceData', 'studyData', 'taskData', 'houseworkData'];
-        let hasRemoteData = false;
-        
-        for (const key of keys) {
-          const remoteData = await window.StorageHelper.getFromSupabase(key);
-          if (remoteData) {
-            hasRemoteData = true;
-          }
-        }
-        
-        // 不需要上传本地数据，因为我们只保留云存储
-        // 如果没有云端数据，保持空状态
-        
-        // 启动实时同步
-        window.StorageHelper.startSync();
-        
-        // 静默刷新页面数据
-        window.dispatchEvent(new CustomEvent('dataUpdated', { detail: { key: 'all', silent: true } }));
-      } catch (error) {
-        console.error('Init sync error:', error);
-      }
-    }
-    
-    // 监听数据更新事件，刷新各个模块
-    window.addEventListener('dataUpdated', (e) => {
-      console.log('Data updated:', e.detail);
-      // 刷新各个模块的数据
-      if (typeof loadData === 'function') loadData();
-      if (typeof loadStudyData === 'function') loadStudyData();
-      if (typeof loadTaskData === 'function') loadTaskData();
-      if (typeof loadHouseworkData === 'function') loadHouseworkData();
-      
-      // 静默更新，不显示通知（除非是其他设备更新）
-      if (!e.detail.silent && e.detail.key !== 'all') {
-        // 可选：显示轻量级更新提示
-        console.log('数据已从云端同步');
-      }
-    });
-    
-    // 页面加载时初始化同步
-    initSync();
   </script>
 </body></html>
