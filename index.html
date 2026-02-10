@@ -1353,21 +1353,28 @@
 
       // 设置数据（仅同步到 Supabase）
       set: async function(key, value) {
-        // 自动保存到 Supabase（共享数据）- 静默同步，不显示通知
+        // 自动保存到 Supabase（共享数据）
         if (this.isSupabaseAvailable()) {
-          await this.setToSupabase(key, value);
+          const success = await this.setToSupabase(key, value);
+          if (!success) {
+            console.warn(`保存 ${key} 到 Supabase 失败`);
+          }
+          return success;
         }
         
-        return true;
+        console.warn('Supabase 不可用，无法保存数据');
+        return false;
       },
       
       // 保存到 Supabase（共享数据）
       setToSupabase: async function(key, value) {
         if (!this.isSupabaseAvailable()) {
+          console.error('Supabase 客户端不可用');
           return false;
         }
         try {
-          const { error } = await window.supabaseClient
+          console.log(`正在保存 ${key} 到 Supabase...`);
+          const { data, error } = await window.supabaseClient
             .from('shared_data')
             .upsert({
               data_key: key,
@@ -1375,12 +1382,19 @@
               updated_at: new Date().toISOString()
             }, {
               onConflict: 'data_key'
-            });
+            })
+            .select();
           
-          if (error) throw error;
+          if (error) {
+            console.error('Supabase upsert 错误:', error);
+            throw error;
+          }
+          
+          console.log(`成功保存 ${key} 到 Supabase:`, data);
           return true;
         } catch (e) {
           console.error('Error saving data to Supabase:', e);
+          console.error('错误详情:', e.message, e.code);
           return false;
         }
       },
@@ -1472,7 +1486,7 @@
         
         // 上传本地数据到 Supabase
         for (const key of keys) {
-          const localData = this.get(key);
+          const localData = await this.get(key);
           if (localData) {
             await this.setToSupabase(key, localData);
           }
@@ -1486,19 +1500,88 @@
         this.isSyncing = false;
         return true;
       },
+      
+      // 诊断 Supabase 连接和表状态
+      diagnose: async function() {
+        console.log('========== Supabase 诊断开始 ==========');
+        
+        // 1. 检查 Supabase 客户端
+        if (!window.supabaseClient) {
+          console.error('❌ Supabase 客户端未初始化');
+          return false;
+        }
+        console.log('✅ Supabase 客户端已初始化');
+        console.log('Supabase URL:', window.supabaseClient.supabaseUrl);
+        
+        // 2. 检查 shared_data 表是否存在
+        try {
+          const { data, error } = await window.supabaseClient
+            .from('shared_data')
+            .select('count')
+            .limit(1);
+          
+          if (error) {
+            console.error('❌ shared_data 表访问失败:', error.message);
+            console.error('错误代码:', error.code);
+            console.error('请确保已在 Supabase 中执行以下 SQL 创建表:');
+            console.error(`
+CREATE TABLE IF NOT EXISTS shared_data (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    data_key TEXT NOT NULL UNIQUE,
+    data_value JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
+            `);
+            return false;
+          }
+          console.log('✅ shared_data 表可访问');
+        } catch (e) {
+          console.error('❌ 检查表时出错:', e);
+          return false;
+        }
+        
+        // 3. 测试写入数据
+        try {
+          const testData = { test: true, timestamp: new Date().toISOString() };
+          const { data, error } = await window.supabaseClient
+            .from('shared_data')
+            .upsert({
+              data_key: 'test_connection',
+              data_value: testData,
+              updated_at: new Date().toISOString()
+            })
+            .select();
+          
+          if (error) {
+            console.error('❌ 测试写入失败:', error.message);
+            console.error('这可能是权限问题，请检查 RLS 策略');
+            return false;
+          }
+          console.log('✅ 测试写入成功:', data);
+        } catch (e) {
+          console.error('❌ 测试写入时出错:', e);
+          return false;
+        }
+        
+        console.log('========== Supabase 诊断完成 ==========');
+        return true;
+      },
 
 
 
       // 导出所有数据
-      exportAllData: function() {
+      exportAllData: async function() {
         try {
           const allData = {
             version: window.DATA_VERSION,
             exportDate: new Date().toISOString(),
             data: {
-              familyFinanceData: this.get('familyFinanceData', {}),
-              studyData: this.get('studyData', {}),
-              taskData: this.get('taskData', {})
+              familyFinanceData: await this.get('familyFinanceData', {}),
+              studyData: await this.get('studyData', {}),
+              taskData: await this.get('taskData', {})
             }
           };
           
@@ -1622,8 +1705,8 @@
 
     window.AppHelper = {
       // 数据加载通用函数
-      loadData: function(key, defaultData) {
-        const savedData = StorageHelper.get(key, {
+      loadData: async function(key, defaultData) {
+        const savedData = await StorageHelper.get(key, {
           version: DATA_VERSION,
           ...defaultData
         });
@@ -1638,12 +1721,19 @@
       },
 
       // 数据保存通用函数
-      saveData: function(key, data) {
+      saveData: async function(key, data) {
         const dataToSave = {
           version: DATA_VERSION,
           ...data
         };
-        const saved = StorageHelper.set(key, dataToSave);
+        console.log(`AppHelper.saveData: 正在保存 ${key}...`);
+        const saved = await StorageHelper.set(key, dataToSave);
+        
+        if (saved) {
+          console.log(`AppHelper.saveData: ${key} 保存成功`);
+        } else {
+          console.error(`AppHelper.saveData: ${key} 保存失败`);
+        }
         
         return saved;
       },
@@ -1849,8 +1939,8 @@
 
 
       // 从云存储加载数据
-      function loadData() {
-        const savedData = AppHelper.loadData('familyFinanceData', {
+      async function loadData() {
+        const savedData = await AppHelper.loadData('familyFinanceData', {
           transactions: [],
           budgets: appData.budgets,
           settings: appData.settings
@@ -1868,12 +1958,14 @@
       }
 
       // 保存数据到云存储
-      function saveData() {
-        return AppHelper.saveData('familyFinanceData', {
+      async function saveData() {
+        const result = await AppHelper.saveData('familyFinanceData', {
           transactions: appData.transactions,
           budgets: appData.budgets,
           settings: appData.settings
         });
+        
+        return result;
       }
 
       // 格式化日期为YYYY-MM-DD - 向后兼容的包装函数
@@ -2075,7 +2167,7 @@
       }
 
       // 添加交易记录
-      function addTransaction(transaction) {
+      async function addTransaction(transaction) {
         // 生成唯一ID
         transaction.id = generateId(transaction.type);
         
@@ -2083,7 +2175,7 @@
         appData.transactions.push(transaction);
         
         // 保存数据
-        saveData();
+        await saveData();
         
         // 更新UI
         updateDashboard();
@@ -2144,11 +2236,11 @@
       }
 
       // 删除交易记录
-      function deleteTransaction(id) {
+      async function deleteTransaction(id) {
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {
           appData.transactions.splice(index, 1);
-          saveData();
+          await saveData();
           updateDashboard();
           updateTransactionTable();
           updateBudgetPage();
@@ -2159,9 +2251,9 @@
       }
 
       // 批量删除交易记录
-      function deleteSelectedTransactions(ids) {
+      async function deleteSelectedTransactions(ids) {
         appData.transactions = appData.transactions.filter(t => !ids.includes(t.id));
-        saveData();
+        await saveData();
         updateDashboard();
         updateTransactionTable();
         updateBudgetPage();
@@ -3135,8 +3227,8 @@
           const calculatedBudget = daysInMonth * 60;
           // 更新预算
           budget.total = calculatedBudget;
-          // 保存到云存储
-          saveData();
+          // 保存到云存储（在初始化时异步保存）
+          (async () => { await saveData(); })();
           
           // 确保预算分类符合要求：
           // 1. 购物预算固定为620元
@@ -3804,9 +3896,18 @@
       }
 
       // 初始化应用
-      function initApp() {
+      async function initApp() {
+        // 运行 Supabase 诊断（仅输出到控制台）
+        console.log('正在运行 Supabase 诊断...');
+        const isConnected = await StorageHelper.diagnose();
+        if (!isConnected) {
+          console.warn('⚠️ Supabase 连接异常，数据将无法保存到云端');
+        } else {
+          console.log('✅ Supabase 连接正常');
+        }
+        
         // 加载数据
-        loadData();
+        await loadData();
         
         // 初始化分类选择器
         initCategorySelectors();
@@ -4178,7 +4279,7 @@
         });
         
         // 提交预算编辑
-        document.getElementById('submitBudgetEdit').addEventListener('click', function() {
+        document.getElementById('submitBudgetEdit').addEventListener('click', async function() {
           console.log('保存预算按钮被点击');
           const amount = parseFloat(document.getElementById('budgetAmount').value);
           const type = document.getElementById('budgetValueType').value;
@@ -4337,7 +4438,7 @@
           }
           
           // 保存数据
-          saveData();
+          await saveData();
           console.log('数据已保存');
           
           // 更新UI
@@ -4432,7 +4533,7 @@
           // 处理Excel文件
           if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
             const reader = new FileReader();
-            reader.onload = function(event) {
+            reader.onload = async function(event) {
               try {
                 const data = new Uint8Array(event.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
@@ -4649,7 +4750,7 @@
                 showConfirmDialog(
                   '导入数据',
                   `即将导入 ${importedData.transactions.length} 条交易记录和 ${importedData.budgets.length} 条预算记录，数据将添加到现有记录中。是否继续？`,
-                  () => {
+                  async () => {
                     // 实现数据去重 - 基于交易内容
                     // 为现有交易生成指纹（基于关键属性）
                     const existingTransactionFingerprints = new Set();
@@ -4690,7 +4791,7 @@
                     }
                     
                     // 保存数据
-                    saveData();
+                    await saveData();
                     
                     // 更新UI
                     updateDashboard();
@@ -4712,7 +4813,7 @@
           // 处理JSON文件（保持原有功能）
           else if (file.name.endsWith('.json')) {
             const reader = new FileReader();
-            reader.onload = function(event) {
+            reader.onload = async function(event) {
               try {
                 const importedData = JSON.parse(event.target.result);
                 
@@ -4724,14 +4825,14 @@
                 showConfirmDialog(
                   '导入数据',
                   '导入数据将覆盖当前所有数据，您确定要继续吗？',
-                  () => {
+                  async () => {
                     // 更新数据
                     appData.transactions = importedData.transactions || [];
                     appData.budgets = importedData.budgets || appData.budgets;
                     appData.settings = importedData.settings || appData.settings;
                     
                     // 保存数据
-                    saveData();
+                    await saveData();
                     
                     // 更新UI
                     updateDashboard();
@@ -7077,8 +7178,8 @@
     }
 
     // 加载学习数据
-    function loadStudyData() {
-      const savedData = AppHelper.loadData('studyData', {
+    async function loadStudyData() {
+      const savedData = await AppHelper.loadData('studyData', {
         plans: [],
         courses: [],
         records: [],
@@ -7095,14 +7196,16 @@
     }
 
     // 保存学习数据到云存储
-    function saveStudyData() {
-      return AppHelper.saveData('studyData', {
+    async function saveStudyData() {
+      const result = await AppHelper.saveData('studyData', {
         plans: studyData.plans,
         courses: studyData.courses,
         records: studyData.records,
         monthlyPlans: studyData.monthlyPlans,
         weeklyPlans: studyData.weeklyPlans
       });
+      
+      return result;
     }
 
     // 设置事件监听器
@@ -7477,7 +7580,7 @@
       modal.classList.remove('hidden');
     }
 
-    function saveMonthlyPlan(e) {
+    async function saveMonthlyPlan(e) {
       e.preventDefault();
       const id = document.getElementById('monthlyPlanId').value;
       const year = parseInt(document.getElementById('monthlyPlanYear').value);
@@ -7514,13 +7617,13 @@
         studyData.monthlyPlans.push(planData);
       }
 
-      saveStudyData();
+      await saveStudyData();
       AppHelper.closeModal('monthlyPlanModal');
       renderMonthlyPlans();
       showNotification('成功', '月计划已保存', 'success');
     }
 
-    function deleteMonthlyPlan(planId) {
+    async function deleteMonthlyPlan(planId) {
       if (confirm('确定要删除这个月计划吗？这将同时删除所有关联的周计划。')) {
         // 删除关联的周计划
         studyData.weeklyPlans = studyData.weeklyPlans.filter(p => p.monthId !== planId);
@@ -7528,7 +7631,7 @@
         // 删除月计划
         studyData.monthlyPlans = studyData.monthlyPlans.filter(p => p.id !== planId);
         
-        saveStudyData();
+        await saveStudyData();
         renderMonthlyPlans();
         // updatePlanStatistics(); // 已移除顶部显示模块
       }
@@ -7659,7 +7762,7 @@
     }
 
     // 切换月计划完成状态
-    function toggleMonthlyPlanComplete(planId) {
+    async function toggleMonthlyPlanComplete(planId) {
       const plan = studyData.monthlyPlans.find(p => p.id === planId);
       if (plan) {
         // 如果计划未完成，需要验证学习进度
@@ -7686,14 +7789,14 @@
         // 如果是取消完成，或者进度已达到100%，则允许切换状态
         plan.completed = !plan.completed;
         plan.updatedAt = new Date().toISOString();
-        saveStudyData();
+        await saveStudyData();
         renderMonthlyPlans();
         // updatePlanStatistics(); // 已移除顶部显示模块
       }
     }
 
     // 一键生成本月所有周计划
-    function generateAllWeeklyPlans(monthlyPlanId) {
+    async function generateAllWeeklyPlans(monthlyPlanId) {
       const monthlyPlan = studyData.monthlyPlans.find(p => p.id === monthlyPlanId);
       if (!monthlyPlan) {
         alert('月计划不存在');
@@ -7747,7 +7850,7 @@
         }
       }
 
-      saveStudyData();
+      await saveStudyData();
       renderMonthlyPlans();
       renderWeeklyPlans();
       // updatePlanStatistics(); // 已移除顶部显示模块
@@ -7967,7 +8070,7 @@
       }
     }
 
-    function saveWeeklyPlan(e) {
+    async function saveWeeklyPlan(e) {
       e.preventDefault();
       const id = document.getElementById('weeklyPlanId').value;
       const monthId = document.getElementById('weeklyPlanMonthly').value;
@@ -8028,16 +8131,16 @@
         studyData.weeklyPlans.push(planData);
       }
 
-      saveStudyData();
+      await saveStudyData();
       AppHelper.closeModal('weeklyPlanModal');
       renderWeeklyPlans();
       updateMonthlyPlanLinkCard();
     }
 
-    function deleteWeeklyPlan(planId) {
+    async function deleteWeeklyPlan(planId) {
       if (confirm('确定要删除这个周计划吗？')) {
         studyData.weeklyPlans = studyData.weeklyPlans.filter(p => p.id !== planId);
-        saveStudyData();
+        await saveStudyData();
         renderWeeklyPlans();
         // updatePlanStatistics(); // 已移除顶部显示模块
       }
@@ -8220,7 +8323,7 @@
       }).join('');
     }
 
-    function toggleWeeklyPlanComplete(planId) {
+    async function toggleWeeklyPlanComplete(planId) {
       const plan = studyData.weeklyPlans.find(p => p.id === planId);
       if (plan) {
         // 如果计划未完成，需要验证学习进度
@@ -8279,14 +8382,14 @@
         // 如果是取消完成，或者进度已达到100%，则允许切换状态
         plan.completed = !plan.completed;
         plan.updatedAt = new Date().toISOString();
-        saveStudyData();
+        await saveStudyData();
         renderWeeklyPlans();
         // updatePlanStatistics(); // 已移除顶部显示模块
       }
     }
 
     // 从月计划智能生成周计划
-    function generateWeeklyPlansFromMonthly() {
+    async function generateWeeklyPlansFromMonthly() {
       const now = new Date();
       const currentMonth = now.getMonth() + 1;
       const currentYear = now.getFullYear();
@@ -8348,7 +8451,7 @@
       const dateRange = getWeekDateRange(currentYear, currentWeek);
 
       studyData.weeklyPlans.push(weeklyPlan);
-      saveStudyData();
+      await saveStudyData();
       renderWeeklyPlans();
       // updatePlanStatistics(); // 已移除顶部显示模块
       updateMonthlyPlanLinkCard();
@@ -8597,7 +8700,7 @@
       modal.classList.remove('hidden');
     }
 
-    function saveStudyPlan(e) {
+    async function saveStudyPlan(e) {
       e.preventDefault();
       const id = document.getElementById('studyPlanId').value;
       const planData = {
@@ -8619,16 +8722,16 @@
         studyData.plans.push(planData);
       }
 
-      saveStudyData();
+      await saveStudyData();
       closeModal('addStudyPlanModal');
       renderStudyPlans();
       updateStudyDashboard();
     }
 
-    function deleteStudyPlan(id) {
+    async function deleteStudyPlan(id) {
       if (confirm('确定要删除这个学习计划吗？')) {
         studyData.plans = studyData.plans.filter(p => p.id !== id);
-        saveStudyData();
+        await saveStudyData();
         renderStudyPlans();
       }
     }
@@ -8724,7 +8827,7 @@
       modal.classList.remove('hidden');
     }
 
-    function saveCourse(e) {
+    async function saveCourse(e) {
       e.preventDefault();
       const id = document.getElementById('courseId').value;
       const courseName = document.getElementById('courseName').value;
@@ -8759,17 +8862,17 @@
         studyData.courses.push(courseData);
       }
 
-      saveStudyData();
+      await saveStudyData();
       closeModal('addCourseModal');
       renderCourses();
       updateStudyDashboard();
       updateStudyCharts();
     }
 
-    function deleteCourse(id) {
+    async function deleteCourse(id) {
       if (confirm('确定要删除这个课程吗？')) {
         studyData.courses = studyData.courses.filter(c => c.id !== id);
-        saveStudyData();
+        await saveStudyData();
         renderCourses();
         updateStudyDashboard();
         updateStudyCharts();
@@ -8855,7 +8958,7 @@
     }
 
     // 学习记录相关函数
-    function addStudyRecord(e) {
+    async function addStudyRecord(e) {
       e.preventDefault();
       
       const startTime = document.getElementById('recordStartTime').value;
@@ -8902,7 +9005,7 @@
         }
       }
 
-      saveStudyData();
+      await saveStudyData();
 
       // 重置表单
       document.getElementById('addStudyRecordForm').reset();
@@ -8990,7 +9093,7 @@
       }
     }
 
-    function deleteStudyRecord(id) {
+    async function deleteStudyRecord(id) {
       if (confirm('确定要删除这条学习记录吗？')) {
         const recordToDelete = studyData.records.find(r => r.id === id);
         studyData.records = studyData.records.filter(r => r.id !== id);
@@ -9010,7 +9113,7 @@
           }
         }
 
-        saveStudyData();
+        await saveStudyData();
         renderStudyRecords();
         renderRecentStudyRecords();
         renderCourses(); // 重新渲染课程列表以更新进度
@@ -10091,7 +10194,7 @@
 
     // 导入学习数据
     function importStudyData(e) {
-      AppHelper.importData(e, function(importedData) {
+      AppHelper.importData(e, async function(importedData) {
         studyData.plans = importedData.plans || [];
         studyData.courses = importedData.courses || [];
         
@@ -10105,7 +10208,7 @@
         
         studyData.monthlyPlans = importedData.monthlyPlans || [];
         studyData.weeklyPlans = importedData.weeklyPlans || [];
-        saveStudyData();
+        await saveStudyData();
         renderStudyPlans();
         renderCourses();
         renderStudyRecords();
@@ -10164,8 +10267,8 @@
     }
 
     // 加载家务数据
-    function loadHouseworkData() {
-      const savedData = AppHelper.loadData('houseworkData', {
+    async function loadHouseworkData() {
+      const savedData = await AppHelper.loadData('houseworkData', {
         tasks: [],
         types: []
       });
@@ -10176,11 +10279,13 @@
     }
 
     // 保存家务数据到云存储
-    function saveHouseworkData() {
-      return AppHelper.saveData('houseworkData', {
+    async function saveHouseworkData() {
+      const result = await AppHelper.saveData('houseworkData', {
         tasks: houseworkData.tasks,
         types: houseworkData.types
       });
+      
+      return result;
     }
     
     // 获取本地时区的ISO格式时间字符串
@@ -10456,7 +10561,7 @@
     }
 
     // 保存家务
-    function saveHousework(e) {
+    async function saveHousework(e) {
       e.preventDefault();
 
       const id = document.getElementById('houseworkId').value;
@@ -10484,7 +10589,7 @@
         houseworkData.tasks.push(newTaskData);
       }
 
-      saveHouseworkData();
+      await saveHouseworkData();
       closeHouseworkModal('addHouseworkModal');
       
       // 更新所有相关数据
@@ -10507,10 +10612,10 @@
     }
 
     // 删除家务
-    function deleteHousework(id) {
+    async function deleteHousework(id) {
       if (confirm('确定要删除这个家务吗？')) {
         houseworkData.tasks = houseworkData.tasks.filter(t => t.id !== id);
-        saveHouseworkData();
+        await saveHouseworkData();
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -10529,7 +10634,7 @@
     }
 
     // 标记家务完成
-    function toggleHouseworkComplete(id) {
+    async function toggleHouseworkComplete(id) {
       const task = houseworkData.tasks.find(t => t.id === id);
       if (task) {
         if (task.status === 'completed') {
@@ -10539,7 +10644,7 @@
           task.status = 'completed';
           task.completedAt = new Date().toISOString();
         }
-        saveHouseworkData();
+        await saveHouseworkData();
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -10558,11 +10663,11 @@
     }
 
     // 开始进行家务
-    function startHousework(id) {
+    async function startHousework(id) {
       const task = houseworkData.tasks.find(t => t.id === id);
       if (task && task.status === 'pending') {
         task.status = 'in-progress';
-        saveHouseworkData();
+        await saveHouseworkData();
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -10582,12 +10687,12 @@
     }
 
     // 完成家务
-    function completeHousework(id) {
+    async function completeHousework(id) {
       const task = houseworkData.tasks.find(t => t.id === id);
       if (task && task.status === 'in-progress') {
         task.status = 'completed';
         task.completedAt = new Date().toISOString();
-        saveHouseworkData();
+        await saveHouseworkData();
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -11060,10 +11165,10 @@
 
     // 导入家务数据
     function importHouseworkData(e) {
-      AppHelper.importData(e, function(importedData) {
+      AppHelper.importData(e, async function(importedData) {
         houseworkData.tasks = importedData.tasks || [];
         houseworkData.types = importedData.types || [];
-        saveHouseworkData();
+        await saveHouseworkData();
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -11300,8 +11405,8 @@
     }
 
     // 加载任务数据
-    function loadTaskData() {
-      const savedData = AppHelper.loadData('taskData', {
+    async function loadTaskData() {
+      const savedData = await AppHelper.loadData('taskData', {
         tasks: [],
         tags: []
       });
@@ -11312,11 +11417,13 @@
     }
 
     // 保存任务数据到云存储
-    function saveTaskData() {
-      return AppHelper.saveData('taskData', {
+    async function saveTaskData() {
+      const result = await AppHelper.saveData('taskData', {
         tasks: taskData.tasks,
         tags: taskData.tags
       });
+      
+      return result;
     }
 
     // 设置事件监听器
@@ -11538,7 +11645,7 @@
     }
 
     // 保存任务
-    function saveTask(e) {
+    async function saveTask(e) {
       e.preventDefault();
 
       const id = document.getElementById('taskId').value;
@@ -11563,7 +11670,7 @@
         taskData.tasks.push(newTaskData);
       }
 
-      saveTaskData();
+      await saveTaskData();
       closeTaskModal('addTaskModal');
       
       // 更新所有相关数据
@@ -11578,10 +11685,10 @@
     }
 
     // 删除任务
-    function deleteTask(id) {
+    async function deleteTask(id) {
       if (confirm('确定要删除这个任务吗？')) {
         taskData.tasks = taskData.tasks.filter(t => t.id !== id);
-        saveTaskData();
+        await saveTaskData();
         updateTaskDashboard();
         renderPendingTasks();
         renderInProgressTasks();
@@ -11592,7 +11699,7 @@
     }
 
     // 标记任务完成
-    function toggleTaskComplete(id) {
+    async function toggleTaskComplete(id) {
       const task = taskData.tasks.find(t => t.id === id);
       if (task) {
         if (task.status === 'completed') {
@@ -11602,7 +11709,7 @@
           task.status = 'completed';
           task.completedAt = new Date().toISOString();
         }
-        saveTaskData();
+        await saveTaskData();
         updateTaskDashboard();
         renderPendingTasks();
         renderInProgressTasks();
@@ -11822,10 +11929,10 @@
 
     // 导入任务数据
     function importTaskData(e) {
-      AppHelper.importData(e, function(importedData) {
+      AppHelper.importData(e, async function(importedData) {
         taskData.tasks = importedData.tasks || [];
         taskData.tags = importedData.tags || [];
-        saveTaskData();
+        await saveTaskData();
         updateTaskDashboard();
         renderPendingTasks();
         renderInProgressTasks();
