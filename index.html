@@ -1314,41 +1314,15 @@
       // 同步状态
       isSyncing: false,
       
-      // 检查localStorage是否可用
-      isAvailable: function() {
-        try {
-          const testKey = 'test_localstorage_availability';
-          localStorage.setItem(testKey, testKey);
-          localStorage.removeItem(testKey);
-          return true;
-        } catch (e) {
-          return false;
-        }
-      },
-      
       // 检查 Supabase 是否可用
       isSupabaseAvailable: function() {
         return window.supabaseClient && window.SHARED_DATA_ID;
       },
 
-      // 获取数据（优先从 localStorage）
-      get: function(key, defaultValue = null) {
-        if (this.isAvailable()) {
-          try {
-            const value = localStorage.getItem(key);
-            return value ? JSON.parse(value) : defaultValue;
-          } catch (e) {
-            console.error('Error getting data from localStorage:', e);
-            return defaultValue;
-          }
-        }
-        return defaultValue;
-      },
-      
-      // 从 Supabase 获取数据（共享数据）
-      getFromSupabase: async function(key) {
+      // 获取数据（仅从 Supabase）
+      get: async function(key, defaultValue = null) {
         if (!this.isSupabaseAvailable()) {
-          return null;
+          return defaultValue;
         }
         try {
           const { data, error } = await window.supabaseClient
@@ -1360,32 +1334,28 @@
           if (error) {
             if (error.code === 'PGRST116') {
               // 记录不存在
-              return null;
+              return defaultValue;
             }
             throw error;
           }
           
-          return data ? data.data_value : null;
+          return data ? data.data_value : defaultValue;
         } catch (e) {
           console.error('Error getting data from Supabase:', e);
-          return null;
+          return defaultValue;
         }
       },
+      
+      // 从 Supabase 获取数据（共享数据）
+      getFromSupabase: async function(key) {
+        return this.get(key);
+      },
 
-      // 设置数据（自动同步到 localStorage 和 Supabase）
-      set: function(key, value) {
-        // 保存到 localStorage
-        if (this.isAvailable()) {
-          try {
-            localStorage.setItem(key, JSON.stringify(value));
-          } catch (e) {
-            console.error('Error saving data to localStorage:', e);
-          }
-        }
-        
+      // 设置数据（仅同步到 Supabase）
+      set: async function(key, value) {
         // 自动保存到 Supabase（共享数据）- 静默同步，不显示通知
         if (this.isSupabaseAvailable()) {
-          this.setToSupabase(key, value);
+          await this.setToSupabase(key, value);
         }
         
         return true;
@@ -1415,18 +1385,10 @@
         }
       },
 
-      // 删除数据
-      remove: function(key) {
-        if (this.isAvailable()) {
-          try {
-            localStorage.removeItem(key);
-          } catch (e) {
-            console.error('Error removing data from localStorage:', e);
-          }
-        }
-        
+      // 删除数据（仅从 Supabase）
+      remove: async function(key) {
         if (this.isSupabaseAvailable()) {
-          this.removeFromSupabase(key);
+          await this.removeFromSupabase(key);
         }
         
         return true;
@@ -1479,11 +1441,6 @@
               const key = payload.new.data_key;
               const value = payload.new.data_value;
               
-              // 更新 localStorage
-              if (this.isAvailable()) {
-                localStorage.setItem(key, JSON.stringify(value));
-              }
-              
               // 触发数据更新事件
               window.dispatchEvent(new CustomEvent('dataUpdated', { 
                 detail: { key, data: value } 
@@ -1524,11 +1481,6 @@
         // 从 Supabase 拉取最新数据
         for (const key of keys) {
           const remoteData = await this.getFromSupabase(key);
-          if (remoteData) {
-            if (this.isAvailable()) {
-              localStorage.setItem(key, JSON.stringify(remoteData));
-            }
-          }
         }
         
         this.isSyncing = false;
@@ -1896,7 +1848,7 @@
 
 
 
-      // 从本地存储加载数据
+      // 从云存储加载数据
       function loadData() {
         const savedData = AppHelper.loadData('familyFinanceData', {
           transactions: [],
@@ -1915,7 +1867,7 @@
         initEditBudgetMonthSelector();
       }
 
-      // 保存数据到本地存储和服务器
+      // 保存数据到云存储
       function saveData() {
         return AppHelper.saveData('familyFinanceData', {
           transactions: appData.transactions,
@@ -3054,7 +3006,97 @@
           // 遍历当年的每个月份，计算年度预算
           for (let month = 1; month <= 12; month++) {
             const monthKey = `${currentYear}-${month.toString().padStart(2, '0')}`;
-            const monthBudget = appData.budgets[monthKey] || appData.budgets.monthly;
+            let monthBudget;
+            
+            // 强制使用基于该月天数的预算计算，确保一致性
+            const daysInMonth = new Date(currentYear, month, 0).getDate();
+            const calculatedBudget = daysInMonth * 60;
+            
+            if (appData.budgets[monthKey]) {
+              // 如果该月份已有数据，使用其总预算，但重新计算分类预算以确保固定值正确
+              monthBudget = appData.budgets[monthKey];
+              monthBudget.total = calculatedBudget;
+              
+              // 重新设置固定预算值
+              monthBudget.categories.shopping = 620;
+              monthBudget.categories.other_expense = 800;
+              monthBudget.categories.food = 200;
+              
+              // 计算已分配的固定预算
+              const fixedBudget = 620 + 800 + 200;
+              let remainingBudget = calculatedBudget - fixedBudget;
+              
+              // 获取其他分类
+              const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
+              
+              // 分配剩余预算给其他分类（平分）
+              if (otherCategories.length > 0) {
+                const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
+                otherCategories.forEach(cat => {
+                  monthBudget.categories[cat] = budgetPerCategory;
+                });
+              }
+              
+              // 验证并修正分类预算总额等于总预算
+              let totalCategoryBudget = 0;
+              Object.keys(monthBudget.categories).forEach(cat => {
+                totalCategoryBudget += monthBudget.categories[cat];
+              });
+              const difference = calculatedBudget - totalCategoryBudget;
+              if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
+                // 将差异分配到第一个其他分类
+                monthBudget.categories[otherCategories[0]] += difference;
+              }
+              
+              // 保存更新后的数据
+              appData.budgets[monthKey] = monthBudget;
+            } else {
+              // 该月份没有数据，初始化该月份的数据
+              monthBudget = {
+                total: calculatedBudget,
+                categories: {
+                  shopping: 620,
+                  other_expense: 800,
+                  food: 200,
+                  transport: 0,
+                  entertainment: 0,
+                  housing: 0,
+                  utilities: 0,
+                  healthcare: 0,
+                  education: 0,
+                  insurance: 0
+                }
+              };
+              
+              // 计算已分配的固定预算
+              const fixedBudget = 620 + 800 + 200;
+              let remainingBudget = calculatedBudget - fixedBudget;
+              
+              // 获取其他分类
+              const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
+              
+              // 分配剩余预算给其他分类（平分）
+              if (otherCategories.length > 0 && remainingBudget > 0) {
+                const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
+                otherCategories.forEach(cat => {
+                  monthBudget.categories[cat] = budgetPerCategory;
+                });
+              }
+              
+              // 验证并修正分类预算总额等于总预算
+              let totalCategoryBudget = 0;
+              Object.keys(monthBudget.categories).forEach(cat => {
+                totalCategoryBudget += monthBudget.categories[cat];
+              });
+              const difference = calculatedBudget - totalCategoryBudget;
+              if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
+                // 将差异分配到第一个其他分类
+                monthBudget.categories[otherCategories[0]] += difference;
+              }
+              
+              // 保存该月份数据
+              appData.budgets[monthKey] = monthBudget;
+            }
             
             // 累加总预算
             yearlyTotal += monthBudget.total || 0;
@@ -3093,7 +3135,7 @@
           const calculatedBudget = daysInMonth * 60;
           // 更新预算
           budget.total = calculatedBudget;
-          // 保存到本地存储
+          // 保存到云存储
           saveData();
           
           // 确保预算分类符合要求：
@@ -3188,7 +3230,7 @@
           
           // 如果有微小差异（由于四舍五入），调整最后一个分类的预算
           const difference = budget.total - totalCategoryBudget;
-          if (Math.abs(difference) > 0.01) {
+          if (Math.abs(difference) >= 0.005) {
             // 将差值加到最后一个分类上
             const lastCategory = Object.keys(budget.categories).pop();
             if (lastCategory) {
@@ -4182,7 +4224,97 @@
             // 遍历当年的每个月份，计算年度预算
             for (let month = 1; month <= 12; month++) {
               const monthKey = `${currentYear}-${month.toString().padStart(2, '0')}`;
-              const monthBudget = appData.budgets[monthKey] || appData.budgets.monthly;
+              let monthBudget;
+              
+              // 强制使用基于该月天数的预算计算，确保一致性
+              const daysInMonth = new Date(currentYear, month, 0).getDate();
+              const calculatedBudget = daysInMonth * 60;
+              
+              if (appData.budgets[monthKey]) {
+                // 如果该月份已有数据，使用其总预算，但重新计算分类预算以确保固定值正确
+                monthBudget = appData.budgets[monthKey];
+                monthBudget.total = calculatedBudget;
+                
+                // 重新设置固定预算值
+                monthBudget.categories.shopping = 620;
+                monthBudget.categories.other_expense = 800;
+                monthBudget.categories.food = 200;
+                
+                // 计算已分配的固定预算
+                const fixedBudget = 620 + 800 + 200;
+                let remainingBudget = calculatedBudget - fixedBudget;
+                
+                // 获取其他分类
+                const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
+                
+                // 分配剩余预算给其他分类（平分）
+                if (otherCategories.length > 0) {
+                  const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
+                  otherCategories.forEach(cat => {
+                    monthBudget.categories[cat] = budgetPerCategory;
+                  });
+                }
+                
+                // 验证并修正分类预算总额等于总预算
+                let totalCategoryBudget = 0;
+                Object.keys(monthBudget.categories).forEach(cat => {
+                  totalCategoryBudget += monthBudget.categories[cat];
+                });
+                const difference = calculatedBudget - totalCategoryBudget;
+                if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
+                  // 将差异分配到第一个其他分类
+                  monthBudget.categories[otherCategories[0]] += difference;
+                }
+                
+                // 保存更新后的数据
+                appData.budgets[monthKey] = monthBudget;
+              } else {
+                // 该月份没有数据，初始化该月份的数据
+                monthBudget = {
+                  total: calculatedBudget,
+                  categories: {
+                    shopping: 620,
+                    other_expense: 800,
+                    food: 200,
+                    transport: 0,
+                    entertainment: 0,
+                    housing: 0,
+                    utilities: 0,
+                    healthcare: 0,
+                    education: 0,
+                    insurance: 0
+                  }
+                };
+                
+                // 计算已分配的固定预算
+                const fixedBudget = 620 + 800 + 200;
+                let remainingBudget = calculatedBudget - fixedBudget;
+                
+                // 获取其他分类
+                const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
+                
+                // 分配剩余预算给其他分类（平分）
+                if (otherCategories.length > 0 && remainingBudget > 0) {
+                  const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
+                  otherCategories.forEach(cat => {
+                    monthBudget.categories[cat] = budgetPerCategory;
+                  });
+                }
+                
+                // 验证并修正分类预算总额等于总预算
+                let totalCategoryBudget = 0;
+                Object.keys(monthBudget.categories).forEach(cat => {
+                  totalCategoryBudget += monthBudget.categories[cat];
+                });
+                const difference = calculatedBudget - totalCategoryBudget;
+                if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
+                  // 将差异分配到第一个其他分类
+                  monthBudget.categories[otherCategories[0]] += difference;
+                }
+                
+                // 保存该月份数据
+                appData.budgets[monthKey] = monthBudget;
+              }
               
               // 累加总预算
               yearlyTotal += monthBudget.total || 0;
@@ -5615,18 +5747,7 @@
 
       <!-- 学习概览 -->
       <div id="study-dashboard-tab-content" class="tab-content active animate-fade-in">
-        <!-- 学习头部横幅 -->
-        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 mb-8 text-white shadow-2xl">
-          <div class="flex flex-col md:flex-row items-center justify-between">
-            <div class="text-center md:text-left mb-6 md:mb-0">
-              <h2 class="text-3xl font-bold mb-2">学习概览</h2>
-              <p class="text-indigo-100 text-lg">跟踪您的学习进度，实现目标</p>
-            </div>
-            <button id="quickLogBtn" class="bg-white text-indigo-600 px-6 py-3 rounded-xl font-medium hover:bg-indigo-50 transition-all duration-300 flex items-center shadow-lg">
-              <i class="fa fa-plus mr-2"></i> 记录学习
-            </button>
-          </div>
-        </div>
+
 
         <!-- 学习统计卡片 -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-8">
@@ -5711,210 +5832,20 @@
                 <div class="text-xs text-gray-500">最高(分钟)</div>
               </div>
             </div>
-            
-            <!-- 学习时段分布 -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-xs font-medium text-gray-600 flex items-center">
-                  <i class="fa fa-clock-o mr-1.5 text-indigo-500"></i>学习时段分布
-                </h4>
-                <span class="text-xs text-gray-400" id="timeDistributionHint">基于最近7天数据</span>
-              </div>
-              <div class="grid grid-cols-4 gap-2" id="timeDistribution">
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-orange-50 to-orange-100 border border-orange-200">
-                  <div class="text-xs text-orange-600 mb-1">🌅 早晨</div>
-                  <div class="text-sm font-bold text-orange-700" id="morningTime">0</div>
-                  <div class="text-xs text-orange-500">分钟</div>
-                </div>
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-blue-50 to-blue-100 border border-blue-200">
-                  <div class="text-xs text-blue-600 mb-1">☀️ 上午</div>
-                  <div class="text-sm font-bold text-blue-700" id="forenoonTime">0</div>
-                  <div class="text-xs text-blue-500">分钟</div>
-                </div>
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-amber-50 to-amber-100 border border-amber-200">
-                  <div class="text-xs text-amber-600 mb-1">🌤️ 下午</div>
-                  <div class="text-sm font-bold text-amber-700" id="afternoonTime">0</div>
-                  <div class="text-xs text-amber-500">分钟</div>
-                </div>
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-indigo-50 to-indigo-100 border border-indigo-200">
-                  <div class="text-xs text-indigo-600 mb-1">🌙 晚上</div>
-                  <div class="text-sm font-bold text-indigo-700" id="eveningTime">0</div>
-                  <div class="text-xs text-indigo-500">分钟</div>
-                </div>
-              </div>
-              <!-- 时段进度条 -->
-              <div class="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden flex" id="timeDistributionBar">
-                <div class="h-full bg-orange-400 transition-all duration-500" id="morningBar" style="width: 25%"></div>
-                <div class="h-full bg-blue-400 transition-all duration-500" id="forenoonBar" style="width: 25%"></div>
-                <div class="h-full bg-amber-400 transition-all duration-500" id="afternoonBar" style="width: 25%"></div>
-                <div class="h-full bg-indigo-400 transition-all duration-500" id="eveningBar" style="width: 25%"></div>
-              </div>
-            </div>
-            
-            <!-- 学习打卡与目标 -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-              <div class="grid grid-cols-2 gap-3">
-                <!-- 连续打卡 -->
-                <div class="p-3 rounded-xl bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100">
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-rose-600 flex items-center">
-                      <i class="fa fa-fire mr-1.5"></i>连续打卡
-                    </span>
-                    <span class="text-xs text-rose-400" id="streakHint">本周</span>
-                  </div>
-                  <div class="flex items-end gap-1">
-                    <span class="text-2xl font-bold text-rose-600" id="studyStreak">0</span>
-                    <span class="text-xs text-rose-500 mb-1">天</span>
-                  </div>
-                  <div class="mt-2 flex gap-1" id="streakDots">
-                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div class="w-4 h-4 rounded-full bg-rose-200"></div>
-                  </div>
-                </div>
-                
-                <!-- 学习目标 -->
-                <div class="p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100">
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-emerald-600 flex items-center">
-                      <i class="fa fa-bullseye mr-1.5"></i>目标进度
-                    </span>
-                    <span class="text-xs text-emerald-400" id="goalHint">周目标</span>
-                  </div>
-                  <div class="flex items-end gap-1">
-                    <span class="text-2xl font-bold text-emerald-600" id="goalProgress">0</span>
-                    <span class="text-xs text-emerald-500 mb-1">%</span>
-                  </div>
-                  <div class="mt-2">
-                    <div class="h-2 bg-emerald-200 rounded-full overflow-hidden">
-                      <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" id="goalProgressBar" style="width: 0%"></div>
-                    </div>
-                    <div class="mt-1 flex justify-between text-xs text-emerald-600">
-                      <span id="currentGoalText">0/420分钟</span>
-                      <span id="goalStatus">未达标</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 学习效率分析 -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-xs font-medium text-gray-600 flex items-center">
-                  <i class="fa fa-line-chart mr-1.5 text-purple-500"></i>学习效率分析
-                </h4>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600" id="efficiencyTag">良好</span>
-              </div>
-              <div class="grid grid-cols-3 gap-2 text-center">
-                <div class="p-2 rounded-lg bg-purple-50">
-                  <div class="text-xs text-purple-500 mb-1">学习天数</div>
-                  <div class="text-lg font-bold text-purple-700" id="studyDays">0</div>
-                  <div class="text-xs text-purple-400">天</div>
-                </div>
-                <div class="p-2 rounded-lg bg-purple-50">
-                  <div class="text-xs text-purple-500 mb-1">单次平均</div>
-                  <div class="text-lg font-bold text-purple-700" id="avgSession">0</div>
-                  <div class="text-xs text-purple-400">分钟</div>
-                </div>
-                <div class="p-2 rounded-lg bg-purple-50">
-                  <div class="text-xs text-purple-500 mb-1">专注指数</div>
-                  <div class="text-lg font-bold text-purple-700" id="focusIndex">--</div>
-                  <div class="text-xs text-purple-400">分</div>
-                </div>
-              </div>
-            </div>
+
           </div>
 
-          <!-- 课程进度 -->
+          <!-- 今日学习时长 -->
           <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6">
             <div class="flex justify-between items-center mb-4">
-              <h3 class="text-base sm:text-lg font-semibold text-gray-800">课程进度</h3>
-              <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full" id="courseProgressSummary">0 门进行中</span>
+              <h3 class="text-base sm:text-lg font-semibold text-gray-800">今日学习时长</h3>
+              <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full" id="todayStudySummary">今日 0 分钟</span>
             </div>
             <div class="h-56 sm:h-64 relative">
-              <canvas id="courseProgressChart"></canvas>
-              <!-- 中心总进度 -->
-              <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span class="text-3xl font-bold text-gray-800" id="overallProgress">0%</span>
-                <span class="text-xs text-gray-500">总体进度</span>
-              </div>
+              <canvas id="todayStudyChart"></canvas>
             </div>
-            <!-- 课程详情列表 -->
-            <div class="mt-4 space-y-3 max-h-48 overflow-y-auto" id="courseProgressDetails">
-              <!-- 动态生成 -->
-            </div>
-            
-            <!-- 课程统计概览 -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-xs font-medium text-gray-600 flex items-center">
-                  <i class="fa fa-pie-chart mr-1.5 text-indigo-500"></i>课程统计概览
-                </h4>
-              </div>
-              <div class="grid grid-cols-4 gap-2" id="courseStatsOverview">
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-indigo-50 to-indigo-100 border border-indigo-200">
-                  <div class="text-xs text-indigo-600 mb-1">总课程</div>
-                  <div class="text-sm font-bold text-indigo-700" id="totalCourses">0</div>
-                  <div class="text-xs text-indigo-500">门</div>
-                </div>
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-emerald-50 to-emerald-100 border border-emerald-200">
-                  <div class="text-xs text-emerald-600 mb-1">已完成</div>
-                  <div class="text-sm font-bold text-emerald-700" id="completedCourses">0</div>
-                  <div class="text-xs text-emerald-500">门</div>
-                </div>
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-amber-50 to-amber-100 border border-amber-200">
-                  <div class="text-xs text-amber-600 mb-1">进行中</div>
-                  <div class="text-sm font-bold text-amber-700" id="activeCourses">0</div>
-                  <div class="text-xs text-amber-500">门</div>
-                </div>
-                <div class="text-center p-2 rounded-lg bg-gradient-to-b from-purple-50 to-purple-100 border border-purple-200">
-                  <div class="text-xs text-purple-600 mb-1">总课时</div>
-                  <div class="text-sm font-bold text-purple-700" id="totalLessons">0</div>
-                  <div class="text-xs text-purple-500">小时</div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 最近学习课程 -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-xs font-medium text-gray-600 flex items-center">
-                  <i class="fa fa-history mr-1.5 text-amber-500"></i>最近学习
-                </h4>
-                <span class="text-xs text-gray-400" id="lastStudyTime">暂无记录</span>
-              </div>
-              <div id="recentCourseList" class="space-y-2">
-                <div class="text-center py-3 text-gray-400 text-xs">
-                  <i class="fa fa-book mr-1"></i>暂无学习记录
-                </div>
-              </div>
-            </div>
-            
-            <!-- 学习建议 -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-xs font-medium text-gray-600 flex items-center">
-                  <i class="fa fa-lightbulb-o mr-1.5 text-yellow-500"></i>学习建议
-                </h4>
-              </div>
-              <div class="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200">
-                <div class="flex items-start gap-2">
-                  <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                    <i class="fa fa-star text-amber-500 text-sm"></i>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-xs text-gray-700 leading-relaxed" id="studySuggestion">
-                      开始添加课程并记录学习进度，让学习更有计划性！
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+
+
           </div>
         </div>
 
@@ -6020,7 +5951,7 @@
         <!-- 添加学习记录 -->
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
           <h3 class="text-lg font-semibold text-gray-800 mb-4">添加学习记录</h3>
-          <form id="addStudyRecordForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <form id="addStudyRecordForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">日期</label>
               <input type="date" id="recordDate" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
@@ -6039,7 +5970,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
               <input type="time" id="recordEndTime" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             </div>
-            <div class="md:col-span-2 lg:col-span-3">
+            <div class="md:col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1">学习内容</label>
               <input type="text" id="recordContent" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：第3章-函数入门">
             </div>
@@ -6056,8 +5987,11 @@
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold text-gray-800">学习记录</h3>
             <div class="flex space-x-2">
+              <select id="recordFilterYear" class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500">
+                <option value="all">全部年份</option>
+              </select>
               <select id="recordFilterMonth" class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500">
-                <option value="all">全部</option>
+                <option value="all">全部月份</option>
               </select>
             </div>
           </div>
@@ -6424,18 +6358,7 @@
 
       <!-- 家务概览 -->
       <div id="housework-dashboard-tab-content" class="tab-content active animate-fade-in">
-        <!-- 家务头部横幅 -->
-        <div class="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-8 mb-8 text-white shadow-2xl">
-          <div class="flex flex-col md:flex-row items-center justify-between">
-            <div class="text-center md:text-left mb-6 md:mb-0">
-              <h2 class="text-3xl font-bold mb-2">家务概览</h2>
-              <p class="text-teal-100 text-lg">高效管理您的家务任务和完成进度</p>
-            </div>
-            <button id="quickAddHouseworkBtn" class="bg-white text-teal-600 px-6 py-3 rounded-xl font-medium hover:bg-teal-50 transition-all duration-300 flex items-center shadow-lg">
-              <i class="fa fa-plus mr-2"></i> 快速添加
-            </button>
-          </div>
-        </div>
+
 
         <!-- 家务统计卡片 -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-8">
@@ -7042,10 +6965,7 @@
           <label class="block text-gray-700 text-sm font-medium mb-2">课程名称 *</label>
           <input type="text" id="courseName" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：Python基础入门">
         </div>
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-medium mb-2">课程描述</label>
-          <textarea id="courseDescription" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" rows="3" placeholder="课程的主要内容和学习目标..."></textarea>
-        </div>
+
         <div class="mb-4">
           <label class="block text-gray-700 text-sm font-medium mb-2">总课时 *</label>
           <input type="number" id="courseTotalLessons" min="1" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：30">
@@ -7174,7 +7094,7 @@
       studyData.weeklyPlans = Array.isArray(savedData.weeklyPlans) ? savedData.weeklyPlans : [];
     }
 
-    // 保存学习数据到本地存储和服务器
+    // 保存学习数据到云存储
     function saveStudyData() {
       return AppHelper.saveData('studyData', {
         plans: studyData.plans,
@@ -7291,8 +7211,13 @@
       updateCourseSelect();
       updateRecordMonthFilter(); // 初始化月份筛选器
 
-      // 初始化学习记录月份筛选器
+      // 初始化学习记录年份和月份筛选器
+      const yearFilter = document.getElementById('recordFilterYear');
       const monthFilter = document.getElementById('recordFilterMonth');
+      if (yearFilter) {
+        // 添加筛选事件
+        yearFilter.addEventListener('change', renderStudyRecords);
+      }
       if (monthFilter) {
         // 添加筛选事件
         monthFilter.addEventListener('change', renderStudyRecords);
@@ -8786,7 +8711,6 @@
           title.textContent = '编辑课程';
           document.getElementById('courseId').value = course.id;
           document.getElementById('courseName').value = course.name;
-          document.getElementById('courseDescription').value = course.description || '';
           document.getElementById('courseTotalLessons').value = course.totalLessons;
           document.getElementById('courseCompletedLessons').value = course.completedLessons || 0;
           document.getElementById('courseProgress').value = course.progress || 0;
@@ -8803,11 +8727,23 @@
     function saveCourse(e) {
       e.preventDefault();
       const id = document.getElementById('courseId').value;
+      const courseName = document.getElementById('courseName').value;
+      
+      // 检查课程名称是否重复
+      const isDuplicate = studyData.courses.some(course => 
+        course.name === courseName && course.id !== id
+      );
+      
+      if (isDuplicate) {
+        alert('该课程名称已存在，请使用不同的名称。');
+        closeModal('addCourseModal');
+        return;
+      }
+      
       const courseData = {
         id: id || Date.now().toString(),
-        name: document.getElementById('courseName').value,
+        name: courseName,
         totalLessons: parseInt(document.getElementById('courseTotalLessons').value),
-        description: document.getElementById('courseDescription').value || '',
         completedLessons: 0,
         progress: 0,
         status: 'active',
@@ -8898,7 +8834,6 @@
                   </button>
                 </div>
               </div>
-              <p class="text-gray-600 text-sm mb-4">${course.description || '暂无描述'}</p>
 
               <div class="space-y-2">
                 <div class="flex justify-between text-sm text-gray-600">
@@ -8999,34 +8934,59 @@
       AppHelper.showNotification('成功', '学习记录已添加', 'success');
     }
 
-    // 更新学习记录月份筛选器
+    // 更新学习记录年份和月份筛选器
     function updateRecordMonthFilter() {
+      const yearFilter = document.getElementById('recordFilterYear');
       const monthFilter = document.getElementById('recordFilterMonth');
-      if (!monthFilter) return;
+      if (!yearFilter || !monthFilter) return;
       
-      const currentSelection = monthFilter.value;
+      const currentYearSelection = yearFilter.value;
+      const currentMonthSelection = monthFilter.value;
       
-      // 获取所有有学习记录的月份
+      // 获取当前日期
+      const now = new Date();
+      const currentYear = now.getFullYear().toString();
+      const currentMonth = `${currentYear}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      // 获取所有有学习记录的年份和月份
+      const years = new Set();
       const months = new Set();
       studyData.records.forEach(record => {
         if (record.date) {
-          months.add(record.date.substring(0, 7)); // YYYY-MM
+          const year = record.date.substring(0, 4); // YYYY
+          const month = record.date.substring(0, 7); // YYYY-MM
+          years.add(year);
+          months.add(month);
         }
       });
       
-      // 填充月份选项
+      // 填充年份选项
+      const sortedYears = Array.from(years).sort().reverse();
+      yearFilter.innerHTML = '<option value="all">全部年份</option>';
+      sortedYears.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year + '年';
+        yearFilter.appendChild(option);
+      });
+      
+      // 填充月份选项（只显示月份名称）
       const sortedMonths = Array.from(months).sort().reverse();
-      monthFilter.innerHTML = '<option value="all">全部</option>';
+      monthFilter.innerHTML = '<option value="all">全部月份</option>';
       sortedMonths.forEach(month => {
+        const [year, monthNum] = month.split('-');
         const option = document.createElement('option');
         option.value = month;
-        option.textContent = month;
+        option.textContent = getMonthName(monthNum);
         monthFilter.appendChild(option);
       });
       
       // 尝试恢复之前的选择
-      if (sortedMonths.includes(currentSelection) || currentSelection === 'all') {
-        monthFilter.value = currentSelection;
+      if (sortedYears.includes(currentYearSelection) || currentYearSelection === 'all') {
+        yearFilter.value = currentYearSelection;
+      }
+      if (sortedMonths.includes(currentMonthSelection) || currentMonthSelection === 'all') {
+        monthFilter.value = currentMonthSelection;
       }
     }
 
@@ -9066,6 +9026,7 @@
       if (!container) return;
 
       // 获取筛选条件
+      const filterYear = document.getElementById('recordFilterYear')?.value || 'all';
       const filterMonth = document.getElementById('recordFilterMonth')?.value || 'all';
 
       let sortedRecords = [...studyData.records].sort((a, b) => {
@@ -9075,7 +9036,10 @@
         return (b.startTime || '').localeCompare(a.startTime || '');
       });
 
-      // 根据月份筛选
+      // 根据年份和月份筛选
+      if (filterYear !== 'all') {
+        sortedRecords = sortedRecords.filter(record => record.date && record.date.startsWith(filterYear));
+      }
       if (filterMonth !== 'all') {
         sortedRecords = sortedRecords.filter(record => record.date && record.date.startsWith(filterMonth));
       }
@@ -9090,55 +9054,190 @@
         return;
       }
 
-      container.innerHTML = sortedRecords.map(record => {
-        const course = studyData.courses.find(c => c.id === record.courseId);
-        const courseName = course ? course.name : '未知课程';
-        return `
-          <div class="p-4 bg-white border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all">
-            <div class="flex items-start justify-between mb-2">
-              <div class="flex items-center gap-3">
-                <div class="bg-indigo-100 p-2 rounded-lg">
-                  <i class="fa fa-book text-indigo-600"></i>
-                </div>
-                <div>
-                  <p class="font-medium text-gray-800">${courseName}</p>
-                  <p class="text-xs text-gray-500">${record.date}</p>
-                </div>
+      // 按年、月、日分组
+      const groupedRecords = {};
+      
+      sortedRecords.forEach(record => {
+        if (!record.date) return;
+        
+        const [year, month] = record.date.split('-');
+        const monthKey = `${year}-${month}`;
+        const dayKey = record.date;
+
+        if (!groupedRecords[monthKey]) {
+          groupedRecords[monthKey] = {
+            month: monthKey,
+            monthName: getMonthName(month),
+            year: year,
+            days: {},
+            totalDuration: 0
+          };
+        }
+
+        if (!groupedRecords[monthKey].days[dayKey]) {
+          groupedRecords[monthKey].days[dayKey] = {
+            day: dayKey,
+            dayName: getDayName(dayKey),
+            records: [],
+            totalDuration: 0
+          };
+        }
+
+        groupedRecords[monthKey].days[dayKey].records.push(record);
+        groupedRecords[monthKey].days[dayKey].totalDuration += parseInt(record.duration || 0);
+        groupedRecords[monthKey].totalDuration += parseInt(record.duration || 0);
+      });
+
+      // 生成卡片网格显示的 HTML
+      let html = '';
+      
+      // 获取当前日期
+      const now = new Date();
+      const currentYear = now.getFullYear().toString();
+      const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+      const currentDate = now.toISOString().split('T')[0];
+      
+      // 按月份倒序
+      Object.keys(groupedRecords).sort((a, b) => b.localeCompare(a)).forEach(monthKey => {
+        const monthData = groupedRecords[monthKey];
+        
+        // 判断是否是本月
+        const isCurrentMonth = monthData.year === currentYear && monthKey === `${currentYear}-${currentMonth}`;
+        
+        html += `
+          <div class="mb-8">
+            <!-- 月份标题 -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center">
+                <i class="fa fa-calendar mr-2 text-lg"></i>
+                <span class="font-bold text-lg">${monthData.year}年 ${monthData.monthName}</span>
+                ${isCurrentMonth ? '<span class="ml-2 bg-white/20 text-white text-xs px-2 py-1 rounded-full">本月</span>' : ''}
               </div>
-              <button onclick="deleteStudyRecord('${record.id}')" class="text-gray-400 hover:text-red-600 p-1">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                <span class="text-sm text-gray-500">总学习时长：</span>
+                <span class="font-bold text-indigo-600">${monthData.totalDuration}</span>
+                <span class="text-sm text-gray-500"> 分钟</span>
+              </div>
             </div>
-            <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-3 mb-2">
-              <div class="flex items-center gap-2 text-sm">
-                <i class="fa fa-play-circle text-indigo-600"></i>
-                <span class="text-gray-700 font-medium">${record.startTime || '--:--'}</span>
-                <i class="fa fa-arrow-right text-gray-400"></i>
-                <span class="text-gray-700 font-medium">${record.endTime || '--:--'}</span>
-                <span class="text-indigo-600 font-bold ml-auto">${record.duration}分钟</span>
+            
+            <!-- 卡片网格 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        `;
+
+        // 按日期倒序
+        Object.keys(monthData.days).sort((a, b) => b.localeCompare(a)).forEach(dayKey => {
+          const dayData = monthData.days[dayKey];
+          
+          // 判断是否是今日
+          const isToday = dayData.day === currentDate;
+          
+          // 按开始时间排序当天的记录
+          const dayRecords = dayData.records.sort((a, b) => {
+            return (b.startTime || '').localeCompare(a.startTime || '');
+          });
+
+          html += `
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-lg hover:border-indigo-300 transition-all duration-300 group">
+              <!-- 卡片头部：日期和星期 -->
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                  <div class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-3 py-1.5 rounded-lg shadow-md">
+                    <div class="text-xs opacity-90">${dayData.day.slice(0, 4)}年</div>
+                    <div class="text-lg font-bold">${dayData.day.slice(5)}</div>
+                  </div>
+                  ${isToday ? '<span class="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-full">今日</span>' : ''}
+                  <div class="text-xs text-gray-500">${dayData.dayName}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-xs text-gray-500">当日时长</div>
+                  <div class="text-lg font-bold text-indigo-600">${dayData.totalDuration} <span class="text-xs font-normal">分钟</span></div>
+                </div>
+              </div>
+              
+              <!-- 当天的学习记录列表 -->
+              <div class="space-y-3">
+          `;
+
+          dayRecords.forEach(record => {
+            const course = studyData.courses.find(c => c.id === record.courseId);
+            const courseName = course ? course.name : '未知课程';
+            
+            html += `
+              <div class="border border-gray-100 rounded-lg p-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <!-- 课程名称 -->
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="bg-indigo-100 p-1.5 rounded-lg">
+                    <i class="fa fa-book text-indigo-600 text-sm"></i>
+                  </div>
+                  <span class="font-semibold text-gray-800 text-sm">${courseName}</span>
+                  <button onclick="deleteStudyRecord('${record.id}')" class="text-gray-400 hover:text-red-600 p-1 ml-auto">
+                    <i class="fa fa-trash text-xs"></i>
+                  </button>
+                </div>
+                
+                <!-- 时间信息 -->
+                <div class="flex items-center gap-2 text-xs text-gray-600 mb-2">
+                  <i class="fa fa-play-circle text-indigo-500"></i>
+                  <span>${record.startTime || '--:--'}</span>
+                  <i class="fa fa-arrow-right text-gray-400"></i>
+                  <span>${record.endTime || '--:--'}</span>
+                  <i class="fa fa-stop-circle text-indigo-500"></i>
+                  <span class="font-bold text-indigo-600 ml-auto">${record.duration}分钟</span>
+                </div>
+                
+                <!-- 学习内容 -->
+                ${record.content ? `
+                  <div class="text-xs text-gray-700 bg-white rounded p-2 border border-gray-100">
+                    <div class="flex items-start gap-1">
+                      <i class="fa fa-pencil text-gray-400 mt-0.5"></i>
+                      <span>${record.content}</span>
+                    </div>
+                  </div>
+                ` : ''}
+                
+                <!-- 备注 -->
+                ${record.note ? `
+                  <div class="text-xs text-gray-400 mt-1">
+                    <i class="fa fa-sticky-note mr-1"></i>${record.note}
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          });
+
+          html += `
               </div>
             </div>
-            ${record.content ? `
-              <div class="text-sm text-gray-700 bg-gray-50 rounded-lg p-2">
-                <i class="fa fa-pencil text-gray-400 mr-2"></i>
-                ${record.content}
-              </div>
-            ` : ''}
-            ${record.note ? `
-              <p class="text-xs text-gray-400 mt-2">
-                <i class="fa fa-sticky-note mr-1"></i>${record.note}
-              </p>
-            ` : ''}
+          `;
+        });
+
+        html += `
+            </div>
           </div>
         `;
-      }).join('');
+      });
+
+      container.innerHTML = html;
+    }
+
+    // 辅助函数：获取月份名称
+    function getMonthName(month) {
+      const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+      return monthNames[parseInt(month) - 1] || month;
+    }
+
+    // 辅助函数：获取星期名称
+    function getDayName(dateStr) {
+      const date = new Date(dateStr);
+      const dayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      return dayNames[date.getDay()];
     }
 
 
 
     // 图表相关函数
     let studyTimeChart = null;
-    let courseProgressChart = null;
+    let todayStudyChart = null;
 
     function initStudyCharts() {
       // 初始化学习时间图表
@@ -9240,10 +9339,10 @@
         updateStudyTimeChart(7);
       }
 
-      // 初始化课程进度图表
-      const courseProgressCtx = document.getElementById('courseProgressChart')?.getContext('2d');
-      if (courseProgressCtx) {
-        const activeCourses = studyData.courses.filter(c => c.status === 'active');
+      // 初始化今日学习时长图表
+      const todayStudyCtx = document.getElementById('todayStudyChart')?.getContext('2d');
+      if (todayStudyCtx) {
+        const today = new Date().toISOString().split('T')[0];
         const courseColors = [
           { bg: 'rgba(79, 70, 229, 0.9)', border: '#4f46e5', gradient: ['#6366f1', '#4f46e5'] },
           { bg: 'rgba(16, 185, 129, 0.9)', border: '#10b981', gradient: ['#34d399', '#10b981'] },
@@ -9255,31 +9354,43 @@
           { bg: 'rgba(249, 115, 22, 0.9)', border: '#f97316', gradient: ['#fb923c', '#f97316'] }
         ];
         
+        // 获取今日有学习记录的课程
+        const todayRecords = studyData.records.filter(r => r.date === today);
+        const courseIdsWithRecords = [...new Set(todayRecords.map(r => r.courseId))];
+        
+        // 计算今日每门课程的学习时长（分钟）
+        const todayCourseDurations = courseIdsWithRecords.map(courseId => {
+          const course = studyData.courses.find(c => c.id === courseId);
+          const courseRecords = todayRecords.filter(r => r.courseId === courseId);
+          const duration = courseRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+          return { course, duration, courseId };
+        }).filter(item => item.course); // 过滤掉可能已删除的课程
+        
         // 创建渐变色
         const gradients = courseColors.map((color, index) => {
-          const gradient = courseProgressCtx.createLinearGradient(0, 0, 0, 200);
+          const gradient = todayStudyCtx.createLinearGradient(0, 0, 0, 200);
           gradient.addColorStop(0, color.gradient[0]);
           gradient.addColorStop(1, color.gradient[1]);
           return gradient;
         });
         
-        courseProgressChart = new Chart(courseProgressCtx, {
-          type: 'doughnut',
+        todayStudyChart = new Chart(todayStudyCtx, {
+          type: 'bar',
           data: {
-            labels: activeCourses.map(c => c.name),
+            labels: todayCourseDurations.map(item => item.course.name.length > 6 ? item.course.name.substring(0, 6) + '...' : item.course.name),
             datasets: [{
-              data: activeCourses.map(c => c.progress || 0),
-              backgroundColor: gradients.length > 0 ? gradients : courseColors.map(c => c.bg),
-              borderColor: '#ffffff',
-              borderWidth: 3,
-              hoverBorderWidth: 5,
-              hoverOffset: 8
+              label: '学习时长（分钟）',
+              data: todayCourseDurations.map(item => item.duration),
+              backgroundColor: gradients.slice(0, todayCourseDurations.length),
+              borderColor: courseColors.slice(0, todayCourseDurations.length).map(c => c.border),
+              borderWidth: 1,
+              borderRadius: 6,
+              barPercentage: 0.6
             }]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '65%',
             plugins: {
               legend: {
                 display: false
@@ -9292,23 +9403,38 @@
                 borderWidth: 1,
                 cornerRadius: 8,
                 padding: 12,
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 callbacks: {
                   label: function(context) {
-                    const course = activeCourses[context.dataIndex];
-                    const completed = course.completedLessons || 0;
-                    const total = course.totalLessons || 0;
-                    return [
-                      `进度: ${context.parsed}%`,
-                      `已学: ${completed} / ${total} 小时`
-                    ];
+                    const durationMinutes = context.parsed.y;
+                    const hours = Math.floor(durationMinutes / 60);
+                    const mins = durationMinutes % 60;
+                    if (hours > 0) {
+                      return `学习时长: ${hours}小时 ${mins}分钟`;
+                    }
+                    return `学习时长: ${mins}分钟`;
                   }
                 }
               }
             },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value) {
+                    return value + '分钟';
+                  }
+                },
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.05)'
+                }
+              },
+              x: {
+                grid: {
+                  display: false
+                }
+              }
+            },
             animation: {
-              animateRotate: true,
-              animateScale: true,
               duration: 1000,
               easing: 'easeOutQuart'
             }
@@ -9316,7 +9442,7 @@
         });
         
         // 更新详情列表
-        updateCourseProgressDetails(activeCourses, courseColors);
+        updateTodayStudyDetails(todayCourseDurations, courseColors);
       }
     }
 
@@ -9328,21 +9454,36 @@
       const now = new Date();
       const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
       
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
-        const dayName = dayNames[date.getDay()];
+      if (days <= 7) {
+        // 显示从周一到周日
+        const currentDay = now.getDay();
+        // 计算本周一的日期
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
         
-        // 7天显示星期，30天显示日期
-        if (days <= 7) {
+        // 显示周一到周日
+        for (let i = 0; i < 7; i++) {
+          const date = new Date(monday);
+          date.setDate(monday.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0];
+          const dayName = dayNames[date.getDay()];
           labels.push(dayName);
-        } else {
-          labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+          
+          const dayRecords = studyData.records.filter(r => r.date === dateStr);
+          const totalMinutes = dayRecords.reduce((sum, r) => sum + r.duration, 0);
+          data.push(totalMinutes);
         }
-        
-        const dayRecords = studyData.records.filter(r => r.date === dateStr);
-        const totalMinutes = dayRecords.reduce((sum, r) => sum + r.duration, 0);
-        data.push(totalMinutes);
+      } else {
+        // 30天显示日期
+        for (let i = days - 1; i >= 0; i--) {
+          const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          const dateStr = date.toISOString().split('T')[0];
+          labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+          
+          const dayRecords = studyData.records.filter(r => r.date === dateStr);
+          const totalMinutes = dayRecords.reduce((sum, r) => sum + r.duration, 0);
+          data.push(totalMinutes);
+        }
       }
 
       studyTimeChart.data.labels = labels;
@@ -9615,8 +9756,8 @@
     function updateStudyCharts() {
       updateStudyTimeChart(7);
       
-      if (courseProgressChart) {
-        const activeCourses = studyData.courses.filter(c => c.status === 'active');
+      if (todayStudyChart) {
+        const today = new Date().toISOString().split('T')[0];
         const courseColors = [
           { bg: 'rgba(79, 70, 229, 0.9)', border: '#4f46e5', gradient: ['#6366f1', '#4f46e5'] },
           { bg: 'rgba(16, 185, 129, 0.9)', border: '#10b981', gradient: ['#34d399', '#10b981'] },
@@ -9628,85 +9769,69 @@
           { bg: 'rgba(249, 115, 22, 0.9)', border: '#f97316', gradient: ['#fb923c', '#f97316'] }
         ];
         
-        courseProgressChart.data.labels = activeCourses.map(c => c.name);
-        courseProgressChart.data.datasets[0].data = activeCourses.map(c => c.progress || 0);
-        courseProgressChart.update('active');
+        // 获取今日有学习记录的课程
+        const todayRecords = studyData.records.filter(r => r.date === today);
+        const courseIdsWithRecords = [...new Set(todayRecords.map(r => r.courseId))];
+        
+        // 计算今日每门课程的学习时长（分钟）
+        const todayCourseDurations = courseIdsWithRecords.map(courseId => {
+          const course = studyData.courses.find(c => c.id === courseId);
+          const courseRecords = todayRecords.filter(r => r.courseId === courseId);
+          const duration = courseRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+          return { course, duration, courseId };
+        }).filter(item => item.course);
+        
+        todayStudyChart.data.labels = todayCourseDurations.map(item => item.course.name.length > 6 ? item.course.name.substring(0, 6) + '...' : item.course.name);
+        todayStudyChart.data.datasets[0].data = todayCourseDurations.map(item => item.duration);
+        todayStudyChart.update('active');
         
         // 更新详情列表
-        updateCourseProgressDetails(activeCourses, courseColors);
+        updateTodayStudyDetails(todayCourseDurations, courseColors);
       }
     }
     
-    // 更新课程进度详情列表
-    function updateCourseProgressDetails(activeCourses, courseColors) {
-      const detailsContainer = document.getElementById('courseProgressDetails');
-      const summaryElement = document.getElementById('courseProgressSummary');
-      const overallProgressElement = document.getElementById('overallProgress');
+    // 更新今日学习时长详情列表
+    function updateTodayStudyDetails(todayCourseDurations, courseColors) {
+      const detailsContainer = document.getElementById('todayStudyDetails');
+      const summaryElement = document.getElementById('todayStudySummary');
       
-      if (!detailsContainer) return;
+      // 计算今日总学习时长
+      const totalDuration = todayCourseDurations.reduce((sum, item) => sum + item.duration, 0);
       
       // 更新摘要信息
       if (summaryElement) {
-        summaryElement.textContent = `${activeCourses.length} 门进行中`;
-      }
-      
-      // 计算总体进度
-      let totalProgress = 0;
-      let totalCompleted = 0;
-      let totalLessons = 0;
-      activeCourses.forEach(course => {
-        totalProgress += (course.progress || 0);
-        totalCompleted += (course.completedLessons || 0);
-        totalLessons += (course.totalLessons || 0);
-      });
-      const overallProgress = activeCourses.length > 0 ? Math.round(totalProgress / activeCourses.length) : 0;
-      const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
-      
-      if (overallProgressElement) {
-        overallProgressElement.textContent = `${overallPercent}%`;
-        // 根据进度设置颜色
-        if (overallPercent >= 80) {
-          overallProgressElement.className = 'text-3xl font-bold text-emerald-500';
-        } else if (overallPercent >= 50) {
-          overallProgressElement.className = 'text-3xl font-bold text-amber-500';
+        const hours = Math.floor(totalDuration / 60);
+        const mins = totalDuration % 60;
+        if (hours > 0) {
+          summaryElement.textContent = `今日 ${hours}小时${mins > 0 ? mins + '分钟' : ''}`;
         } else {
-          overallProgressElement.className = 'text-3xl font-bold text-indigo-500';
+          summaryElement.textContent = `今日 ${mins}分钟`;
         }
       }
       
-      if (activeCourses.length === 0) {
+      if (!detailsContainer) return;
+      
+      if (todayCourseDurations.length === 0) {
         detailsContainer.innerHTML = `
           <div class="text-center py-4 text-gray-400 text-sm">
-            <i class="fa fa-book mb-2 block text-2xl"></i>
-            暂无进行中的课程
+            <i class="fa fa-clock-o mb-2 block text-2xl"></i>
+            今日暂无学习记录
           </div>
         `;
         return;
       }
       
-      detailsContainer.innerHTML = activeCourses.map((course, index) => {
-        const color = courseColors[index % courseColors.length];
-        const progress = course.progress || 0;
-        const completed = course.completedLessons || 0;
-        const total = course.totalLessons || 0;
-        const remaining = Math.max(0, total - completed);
-        
-        // 根据进度确定状态颜色
-        let statusColor = 'bg-gray-200';
-        let statusText = '未开始';
-        if (progress >= 100) {
-          statusColor = 'bg-emerald-500';
-          statusText = '已完成';
-        } else if (progress >= 70) {
-          statusColor = 'bg-emerald-400';
-          statusText = '即将完成';
-        } else if (progress >= 40) {
-          statusColor = 'bg-amber-400';
-          statusText = '进行中';
-        } else if (progress > 0) {
-          statusColor = 'bg-indigo-400';
-          statusText = '刚开始';
-        }
+      // 按学习时长排序
+      const sortedItems = todayCourseDurations.map((item, index) => ({
+        ...item,
+        color: courseColors[index % courseColors.length]
+      })).sort((a, b) => b.duration - a.duration);
+      
+      detailsContainer.innerHTML = sortedItems.map(({ course, duration, color }) => {
+        const hours = Math.floor(duration / 60);
+        const mins = duration % 60;
+        const durationText = hours > 0 ? `${hours}小时${mins > 0 ? mins + '分钟' : ''}` : `${mins}分钟`;
+        const percent = totalDuration > 0 ? Math.round((duration / totalDuration) * 100) : 0;
         
         return `
           <div class="group hover:bg-gray-50 rounded-lg p-2 transition-all duration-200 cursor-pointer" onclick="openCourseModal('${course.id}')">
@@ -9716,20 +9841,18 @@
                 <span class="text-sm font-medium text-gray-700 truncate">${course.name}</span>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
-                <span class="text-xs text-gray-500">${completed}/${total}小时</span>
-                <span class="text-xs font-semibold" style="color: ${color.border}">${progress}%</span>
+                <span class="text-xs font-semibold" style="color: ${color.border}">${durationText}</span>
               </div>
             </div>
             <div class="flex items-center gap-3">
               <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-500 ease-out" 
-                     style="width: ${progress}%; background: linear-gradient(90deg, ${color.gradient[0]}, ${color.gradient[1]})"></div>
+                     style="width: ${percent}%; background: linear-gradient(90deg, ${color.gradient[0]}, ${color.gradient[1]})"></div>
               </div>
-              <div class="flex-shrink-0 w-16 text-right">
-                <span class="text-xs px-2 py-0.5 rounded-full text-white ${statusColor}">${statusText}</span>
+              <div class="flex-shrink-0 w-12 text-right">
+                <span class="text-xs text-gray-500">${percent}%</span>
               </div>
             </div>
-            ${remaining > 0 ? `<div class="mt-1 text-xs text-gray-400">还需 ${remaining} 小时</div>` : ''}
           </div>
         `;
       }).join('');
@@ -9741,6 +9864,8 @@
       updateRecentCourseList();
       
       // 更新学习建议
+      const allCourses = studyData.courses || [];
+      const activeCourses = allCourses.filter(c => c.status === 'active' && (c.progress || 0) < 100).length;
       updateStudySuggestion(activeCourses);
     }
     
@@ -10050,7 +10175,7 @@
       houseworkData.types = Array.isArray(savedData.types) ? savedData.types : [];
     }
 
-    // 保存家务数据到本地存储和服务器
+    // 保存家务数据到云存储
     function saveHouseworkData() {
       return AppHelper.saveData('houseworkData', {
         tasks: houseworkData.tasks,
@@ -11186,7 +11311,7 @@
       taskData.tags = Array.isArray(savedData.tags) ? savedData.tags : [];
     }
 
-    // 保存任务数据到本地存储和服务器
+    // 保存任务数据到云存储
     function saveTaskData() {
       return AppHelper.saveData('taskData', {
         tasks: taskData.tasks,
@@ -11954,19 +12079,11 @@
           const remoteData = await window.StorageHelper.getFromSupabase(key);
           if (remoteData) {
             hasRemoteData = true;
-            localStorage.setItem(key, JSON.stringify(remoteData));
           }
         }
         
-        // 如果没有云端数据，上传本地数据
-        if (!hasRemoteData) {
-          for (const key of keys) {
-            const localData = window.StorageHelper.get(key);
-            if (localData) {
-              await window.StorageHelper.setToSupabase(key, localData);
-            }
-          }
-        }
+        // 不需要上传本地数据，因为我们只保留云存储
+        // 如果没有云端数据，保持空状态
         
         // 启动实时同步
         window.StorageHelper.startSync();
