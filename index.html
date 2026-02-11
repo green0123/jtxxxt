@@ -10679,10 +10679,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 </div>
 
                 <!-- 完成时间 -->
+                ${task.completedAt ? `
                 <div class="flex items-center gap-2 text-xs text-gray-600">
                   <i class="fa fa-clock-o text-teal-500"></i>
-                  <span>完成于 ${task.completedAt ? task.completedAt.split('T')[1].slice(0, 5) : '--:--'}</span>
-                </div>
+                  <span>完成于 ${new Date(task.completedAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                </div>` : ''}
 
                 <!-- 描述 -->
                 ${task.description ? `
