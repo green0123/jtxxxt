@@ -203,7 +203,14 @@
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">家庭信息管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="homeBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
+            <button id="importDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
+              <i class="fa fa-upload mr-2"></i> 导入数据
+            </button>
+            <button id="exportDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
+              <i class="fa fa-download mr-2"></i> 导出数据
+            </button>
+            <input type="file" id="importDataInput" accept=".json" class="hidden">
+            <button id="homeBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
               <i class="fa fa-home mr-2"></i> 首页
             </button>
           </div>
@@ -460,13 +467,6 @@
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">财务管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="exportDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-download mr-2"></i> 导出数据
-            </button>
-            <button id="importDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-upload mr-2"></i> 导入数据
-            </button>
-            <input type="file" id="importDataInput" accept=".xlsx,.xls" class="hidden">
             <button id="backToHomeFromFinance" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
               <i class="fa fa-home mr-2"></i> 返回首页
             </button>
@@ -1065,10 +1065,16 @@
         </div>
       </div>
 
-      <!-- 收支明细 -->
+      <!-- 收支明细/汇总 -->
       <div class="bg-white rounded-lg shadow-card p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-800">收支明细</h3>
+          <div class="flex items-center space-x-2">
+            <h3 class="text-lg font-semibold text-gray-800">收支明细</h3>
+            <div class="flex bg-gray-100 rounded-lg p-1">
+              <button id="showTransactionsDetail" class="px-3 py-1 text-sm rounded-md bg-primary text-white transition-all duration-300">明细</button>
+              <button id="showTransactionsSummary" class="px-3 py-1 text-sm rounded-md text-gray-600 hover:text-gray-800 transition-all duration-300">汇总</button>
+            </div>
+          </div>
           <div class="flex space-x-2">
             <select id="statsFilterType" class="text-sm border-gray-300 rounded-md focus:ring-primary focus:border-primary">
               <option value="all">全部类型</option>
@@ -1083,7 +1089,8 @@
             </button>
           </div>
         </div>
-        <div class="overflow-x-auto">
+        <!-- 收支明细表格 -->
+        <div id="transactionsDetailContainer" class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
@@ -1098,6 +1105,28 @@
               <tr>
                 <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
                   请选择日期查询收支明细
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- 收支汇总表格 -->
+        <div id="transactionsSummaryContainer" class="overflow-x-auto hidden">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">收入笔数</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">收入合计</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">支出笔数</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">支出合计</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">结余</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200" id="dailySummaryTable">
+              <tr>
+                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
+                  请选择日期查询收支汇总
                 </td>
               </tr>
             </tbody>
@@ -1581,7 +1610,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             exportDate: new Date().toISOString(),
             data: {
               familyFinanceData: await this.get('familyFinanceData', {}),
-              studyData: await this.get('studyData', {})
+              studyData: await this.get('studyData', {}),
+              houseworkData: await this.get('houseworkData', {})
             }
           };
           
@@ -1628,6 +1658,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           if (data.data.studyData) {
             this.set('studyData', data.data.studyData);
           }
+          if (data.data.houseworkData) {
+            this.set('houseworkData', data.data.houseworkData);
+          }
           
           return true;
         } catch (e) {
@@ -1642,7 +1675,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           // 获取当前存储的数据
           const currentData = {
             familyFinanceData: this.get('familyFinanceData', {}),
-            studyData: this.get('studyData', {})
+            studyData: this.get('studyData', {}),
+            houseworkData: this.get('houseworkData', {})
           };
           
           // 这里可以添加更复杂的冲突解决逻辑
@@ -4455,407 +4489,53 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         
         
-        // 导出数据
-        document.getElementById('exportDataBtn').addEventListener('click', function() {
-          // 创建工作簿
-          const workbook = XLSX.utils.book_new();
-          
-          // 处理交易数据
-          if (appData.transactions && appData.transactions.length > 0) {
-            // 将交易数据转换为适合Excel的格式
-            const transactionData = appData.transactions.map(transaction => {
-              // 查找分类的中文名称
-              let categoryName = '';
-              const categories = transaction.type === 'income' ? appData.categories.income : appData.categories.expense;
-              const category = categories.find(c => c.id === transaction.category);
-              if (category) {
-                categoryName = category.name;
-              }
-              
-              return {
-                '日期': transaction.date,
-                '类型': transaction.type === 'income' ? '收入' : '支出',
-                '金额': transaction.amount,
-                '分类': categoryName,
-                '备注': transaction.description
-              };
-            });
-            
-            // 创建工作表
-            const transactionSheet = XLSX.utils.json_to_sheet(transactionData);
-            XLSX.utils.book_append_sheet(workbook, transactionSheet, '交易记录');
+        const exportDataButton = document.getElementById('exportDataBtn');
+        const importDataButton = document.getElementById('importDataBtn');
+        const importDataInput = document.getElementById('importDataInput');
+
+        exportDataButton?.addEventListener('click', async function() {
+          const success = await StorageHelper.exportAllData();
+          if (success) {
+            showNotification('导出成功', '已导出系统全部数据。');
+          } else {
+            showNotification('导出失败', '无法导出数据，请稍后重试。', 'error');
           }
-          
-          // 处理预算数据
-          if (appData.budgets && appData.budgets.length > 0) {
-            // 将预算数据转换为适合Excel的格式
-            const budgetData = appData.budgets.map(budget => {
-              // 查找分类的中文名称（预算通常是支出分类，但也检查收入分类）
-              let categoryName = '';
-              let category = appData.categories.expense.find(c => c.id === budget.category);
-              if (!category) {
-                category = appData.categories.income.find(c => c.id === budget.category);
-              }
-              if (category) {
-                categoryName = category.name;
-              }
-              
-              return {
-                '月份': budget.month,
-                '分类': categoryName,
-                '预算金额': budget.amount,
-                '实际支出': budget.actual || 0
-              };
-            });
-            
-            // 创建工作表
-            const budgetSheet = XLSX.utils.json_to_sheet(budgetData);
-            XLSX.utils.book_append_sheet(workbook, budgetSheet, '预算记录');
-          }
-          
-          // 导出Excel文件
-          const fileName = `家庭财务数据-${formatDate(new Date())}.xlsx`;
-          XLSX.writeFile(workbook, fileName);
-          
-          showNotification('导出成功', '数据已成功导出为Excel格式。');
         });
         
-        // 导入数据按钮点击
-        document.getElementById('importDataBtn').addEventListener('click', function() {
-          document.getElementById('importDataInput').click();
+        importDataButton?.addEventListener('click', function() {
+          importDataInput?.click();
         });
         
-        // 导入数据文件选择
-        document.getElementById('importDataInput').addEventListener('change', function(e) {
+        importDataInput?.addEventListener('change', function(e) {
           const file = e.target.files[0];
           if (!file) return;
           
-          // 处理Excel文件
-          if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-            const reader = new FileReader();
-            reader.onload = async function(event) {
-              try {
-                const data = new Uint8Array(event.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                
-                const importedData = { transactions: [], budgets: [] };
-                const errors = [];
-                
-                // 智能识别列名映射
-                const columnMappings = {
-                  date: ['日期', 'Date', 'date'],
-                  type: ['类型', 'Type', 'type'],
-                  amount: ['金额', 'Amount', 'amount'],
-                  category: ['分类', 'Category', 'category'],
-                  description: ['备注', '描述', 'Description', 'description']
-                };
-                
-                // 智能识别工作表
-                let transactionSheetName = null;
-                let budgetSheetName = null;
-                
-                workbook.SheetNames.forEach(sheetName => {
-                  const sheet = workbook.Sheets[sheetName];
-                  const headers = XLSX.utils.sheet_to_json(sheet, { header: 1 })[0] || [];
-                  const headerSet = new Set(headers.map(h => String(h).toLowerCase()));
-                  
-                  // 识别交易记录工作表
-                  if (!transactionSheetName && headers.some(h => 
-                    ['日期', 'date', '类型', 'type', '金额', 'amount'].includes(String(h).toLowerCase())
-                  )) {
-                    transactionSheetName = sheetName;
+          const reader = new FileReader();
+          reader.onload = async function(event) {
+            try {
+              const importedData = JSON.parse(event.target.result);
+              showConfirmDialog(
+                '导入数据',
+                '导入数据将覆盖当前系统所有模块的数据，您确定要继续吗？',
+                async () => {
+                  const success = StorageHelper.importData(importedData);
+                  if (success) {
+                    showNotification('导入成功', '系统数据已更新。');
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 800);
+                  } else {
+                    showNotification('导入失败', '导入数据解析失败。', 'error');
                   }
-                  
-                  // 识别预算记录工作表
-                  if (!budgetSheetName && headers.some(h => 
-                    ['月份', 'month', '分类', 'category', '预算金额', 'budget', '实际支出', 'actual'].includes(String(h).toLowerCase())
-                  )) {
-                    budgetSheetName = sheetName;
-                  }
-                });
-                
-                // 处理交易记录工作表
-                if (transactionSheetName) {
-                  const transactionSheet = workbook.Sheets[transactionSheetName];
-                  const transactionData = XLSX.utils.sheet_to_json(transactionSheet);
-                  
-                  transactionData.forEach((item, index) => {
-                    try {
-                      // 动态映射列名
-                      const mapped = {};
-                      for (const [key, aliases] of Object.entries(columnMappings)) {
-                        for (const alias of aliases) {
-                          for (const [itemKey, itemValue] of Object.entries(item)) {
-                            if (String(itemKey).toLowerCase() === alias.toLowerCase()) {
-                              mapped[key] = itemValue;
-                              break;
-                            }
-                          }
-                          if (mapped[key] !== undefined) break;
-                        }
-                      }
-                      
-                      // 验证必填字段
-                      if (!mapped.date) {
-                        // 如果缺少日期字段，使用当前日期
-                        mapped.date = new Date().toISOString().split('T')[0];
-                      }
-                      if (!mapped.type) {
-                        // 如果缺少类型字段，默认为支出
-                        mapped.type = 'expense';
-                      }
-                      if (!mapped.amount && mapped.amount !== 0) {
-                        // 如果缺少金额字段，默认为0
-                        mapped.amount = 0;
-                      }
-                      
-                      // 处理类型转换
-                      const type = ['收入', 'income'].includes(String(mapped.type).toLowerCase()) ? 'income' : 'expense';
-                      const amount = parseFloat(mapped.amount) || 0;
-                      
-                      // 处理日期格式
-                      let date = mapped.date;
-                      if (date) {
-                        // 尝试将日期转换为YYYY-MM-DD格式
-                        const dateObj = new Date(date);
-                        if (!isNaN(dateObj.getTime())) {
-                          date = dateObj.toISOString().split('T')[0];
-                        }
-                      }
-                      
-                      // 查找分类ID
-                      let categoryId = mapped.category;
-                      if (typeof mapped.category === 'string') {
-                        // 确保appData.categories存在
-                        if (!appData.categories || !appData.categories.income || !appData.categories.expense) {
-                          // 使用默认分类
-                          categoryId = type === 'income' ? 'other_income' : 'other_expense';
-                        } else {
-                          const categories = type === 'income' ? appData.categories.income : appData.categories.expense;
-                          const category = categories.find(c => 
-                            c.name.toLowerCase() === mapped.category.toLowerCase() || 
-                            c.id.toLowerCase() === mapped.category.toLowerCase()
-                          );
-                          if (category) {
-                            categoryId = category.id;
-                          } else {
-                            // 如果没有找到匹配的分类，使用其他分类
-                            categoryId = type === 'income' ? 'other_income' : 'other_expense';
-                          }
-                        }
-                      }
-                      
-                      importedData.transactions.push({
-                        id: `transaction_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                        date: date,
-                        time: mapped.time || '',
-                        type: type,
-                        amount: amount,
-                        category: categoryId,
-                        description: mapped.description || ''
-                      });
-                    } catch (err) {
-                      errors.push(`第${index + 2}行：数据解析错误 - ${err.message}`);
-                    }
-                  });
                 }
-                
-                // 处理预算记录工作表
-                if (budgetSheetName) {
-                  const budgetSheet = workbook.Sheets[budgetSheetName];
-                  const budgetData = XLSX.utils.sheet_to_json(budgetSheet);
-                  
-                  budgetData.forEach((item, index) => {
-                    try {
-                      // 查找月份列
-                      let month = item['月份'] || item['month'] || item['Month'];
-                      if (!month) {
-                        // 如果缺少月份字段，使用当前月份
-                        month = new Date().toISOString().slice(0, 7);
-                      } else {
-                        // 尝试将月份转换为YYYY-MM格式
-                        const dateObj = new Date(month);
-                        if (!isNaN(dateObj.getTime())) {
-                          month = dateObj.toISOString().slice(0, 7);
-                        }
-                      }
-                      
-                      // 查找分类列
-                      let category = item['分类'] || item['category'] || item['Category'];
-                      if (!category) {
-                        // 如果缺少分类字段，使用默认分类
-                        category = 'other_expense';
-                      }
-                      
-                      // 查找预算金额列
-                      let budgetAmount = item['预算金额'] || item['budget'] || item['Budget'] || item['金额'] || item['amount'];
-                      if (!budgetAmount && budgetAmount !== 0) {
-                        // 如果缺少预算金额字段，默认为0
-                        budgetAmount = 0;
-                      }
-                      
-                      // 查找实际支出列
-                      let actualAmount = item['实际支出'] || item['actual'] || item['Actual'] || 0;
-                      
-                      // 查找分类ID
-                      let categoryId = category;
-                      if (typeof category === 'string') {
-                        // 确保appData.categories存在
-                        if (!appData.categories || !appData.categories.income || !appData.categories.expense) {
-                          // 使用默认分类
-                          categoryId = 'other_expense';
-                        } else {
-                          // 先查找支出分类
-                          let categoryObj = appData.categories.expense.find(c => 
-                            c.name.toLowerCase() === category.toLowerCase() || 
-                            c.id.toLowerCase() === category.toLowerCase()
-                          );
-                          // 再查找收入分类
-                          if (!categoryObj) {
-                            categoryObj = appData.categories.income.find(c => 
-                              c.name.toLowerCase() === category.toLowerCase() || 
-                              c.id.toLowerCase() === category.toLowerCase()
-                            );
-                          }
-                          if (categoryObj) {
-                            categoryId = categoryObj.id;
-                          }
-                        }
-                      }
-                      
-                      importedData.budgets.push({
-                        id: `budget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                        month: month,
-                        category: categoryId,
-                        amount: parseFloat(budgetAmount) || 0,
-                        actual: parseFloat(actualAmount) || 0
-                      });
-                    } catch (err) {
-                      errors.push(`预算表第${index + 2}行：数据解析错误 - ${err.message}`);
-                    }
-                  });
-                }
-                
-                // 显示警告信息（如果有）
-                if (errors.length > 0) {
-                  const errorMsg = errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\n... 还有${errors.length - 10}个错误` : '');
-                  showNotification('导入提示', `发现${errors.length}个问题，已自动修复:\n${errorMsg}`, 'info');
-                }
-                
-                // 验证数据格式
-                if (importedData.transactions.length === 0 && importedData.budgets.length === 0) {
-                  throw new Error('未找到可导入的数据');
-                }
-                
-                showConfirmDialog(
-                  '导入数据',
-                  `即将导入 ${importedData.transactions.length} 条交易记录和 ${importedData.budgets.length} 条预算记录，数据将添加到现有记录中。是否继续？`,
-                  async () => {
-                    // 实现数据去重 - 基于交易内容
-                    // 为现有交易生成指纹（基于关键属性）
-                    const existingTransactionFingerprints = new Set();
-                    appData.transactions.forEach(t => {
-                      const fingerprint = `${t.date}_${t.type}_${t.amount}_${t.category}_${t.description || ''}`;
-                      existingTransactionFingerprints.add(fingerprint);
-                    });
-                    
-                    // 过滤掉重复的交易
-                    const uniqueTransactions = importedData.transactions.filter(t => {
-                      const fingerprint = `${t.date}_${t.type}_${t.amount}_${t.category}_${t.description || ''}`;
-                      return !existingTransactionFingerprints.has(fingerprint);
-                    });
-                    
-                    // 将导入数据添加到现有记录中而不是覆盖
-                    if (uniqueTransactions.length > 0) {
-                      appData.transactions.push(...uniqueTransactions);
-                    }
-                    
-                    if (importedData.budgets.length > 0) {
-                      // 预算数据处理：按月份和分类合并，避免重复
-                      let updatedBudgetsCount = 0;
-                      importedData.budgets.forEach(newBudget => {
-                        if (!appData.budgets[newBudget.month]) {
-                          appData.budgets[newBudget.month] = {
-                            total: 0,
-                            categories: {}
-                          };
-                        }
-                        
-                        // 检查是否已存在相同月份和分类的预算
-                        const existingBudget = appData.budgets[newBudget.month].categories[newBudget.category];
-                        if (existingBudget !== newBudget.amount) {
-                          appData.budgets[newBudget.month].categories[newBudget.category] = newBudget.amount;
-                          updatedBudgetsCount++;
-                        }
-                      });
-                    }
-                    
-                    // 保存数据
-                    await saveData();
-                    
-                    // 更新UI
-                    updateDashboard();
-                    updateTransactionTable();
-                    updateBudgetPage();
-                    updateAnalysisCharts();
-                    
-                    showNotification('导入成功', `成功导入 ${uniqueTransactions.length} 条交易记录和更新 ${updatedBudgetsCount || 0} 条预算记录。`);
-                  }
-                );
-              } catch (error) {
-                console.error('Excel导入错误:', error);
-                showNotification('导入失败', `无法解析Excel文件: ${error.message}`, 'error');
-              }
-            };
-            
-            reader.readAsArrayBuffer(file);
-          } 
-          // 处理JSON文件（保持原有功能）
-          else if (file.name.endsWith('.json')) {
-            const reader = new FileReader();
-            reader.onload = async function(event) {
-              try {
-                const importedData = JSON.parse(event.target.result);
-                
-                // 验证数据格式
-                if (!importedData.transactions || !Array.isArray(importedData.transactions)) {
-                  throw new Error('无效的数据格式');
-                }
-                
-                showConfirmDialog(
-                  '导入数据',
-                  '导入数据将覆盖当前所有数据，您确定要继续吗？',
-                  async () => {
-                    // 更新数据
-                    appData.transactions = importedData.transactions || [];
-                    appData.budgets = importedData.budgets || appData.budgets;
-                    appData.settings = importedData.settings || appData.settings;
-                    
-                    // 保存数据
-                    await saveData();
-                    
-                    // 更新UI
-                    updateDashboard();
-                    updateTransactionTable();
-                    updateBudgetPage();
-                    updateAnalysisCharts();
-                    
-                    showNotification('导入成功', 'JSON数据已成功导入。');
-                  }
-                );
-              } catch (error) {
-                console.error('JSON导入错误:', error);
-                showNotification('导入失败', '无法解析JSON文件，请确保文件格式正确。', 'error');
-              }
-            };
-            
-            reader.readAsText(file);
-          }
-          else {
-            showNotification('导入失败', '不支持的文件格式，请选择Excel或JSON文件。', 'error');
-          }
+              );
+            } catch (error) {
+              console.error('JSON导入错误:', error);
+              showNotification('导入失败', '无法解析JSON文件，请确保文件格式正确。', 'error');
+            }
+          };
           
-          // 重置文件输入
+          reader.readAsText(file);
           this.value = '';
         });
         
@@ -4982,8 +4662,31 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           }
         });
         
-        // 导出收支明细为Excel
+        // 收支明细/汇总切换
+        document.getElementById('showTransactionsDetail').addEventListener('click', function() {
+          this.classList.add('bg-primary', 'text-white');
+          this.classList.remove('text-gray-600');
+          document.getElementById('showTransactionsSummary').classList.remove('bg-primary', 'text-white');
+          document.getElementById('showTransactionsSummary').classList.add('text-gray-600');
+          document.getElementById('transactionsDetailContainer').classList.remove('hidden');
+          document.getElementById('transactionsSummaryContainer').classList.add('hidden');
+        });
+        
+        document.getElementById('showTransactionsSummary').addEventListener('click', function() {
+          this.classList.add('bg-primary', 'text-white');
+          this.classList.remove('text-gray-600');
+          document.getElementById('showTransactionsDetail').classList.remove('bg-primary', 'text-white');
+          document.getElementById('showTransactionsDetail').classList.add('text-gray-600');
+          document.getElementById('transactionsDetailContainer').classList.add('hidden');
+          document.getElementById('transactionsSummaryContainer').classList.remove('hidden');
+          updateDailySummary();
+        });
+        
+        // 导出收支明细/汇总为Excel
         document.getElementById('exportTransactionsBtn').addEventListener('click', function() {
+          // 判断当前是明细还是汇总视图
+          const isSummaryView = !document.getElementById('transactionsSummaryContainer').classList.contains('hidden');
+          
           // 获取当前显示的交易数据
           let transactions = [];
           if (currentStatsType === 'daily') {
@@ -5019,52 +4722,134 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             return;
           }
           
-          // 准备导出数据（按日期正序排序）
-          transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-          const exportData = transactions.map(t => {
-            const category = t.type === 'income' 
-              ? appData.categories.income.find(c => c.id === t.category)
-              : appData.categories.expense.find(c => c.id === t.category);
-            
-            return {
-              '日期': t.date,
-              '类型': t.type === 'income' ? '收入' : '支出',
-              '分类': category ? category.name : '未分类',
-              '金额': t.amount,
-              '描述': t.description || '-'
-            };
-          });
-          
           // 创建工作簿
           const workbook = XLSX.utils.book_new();
-          const worksheet = XLSX.utils.json_to_sheet(exportData);
           
-          // 设置列宽
-          worksheet['!cols'] = [
-            { wch: 12 }, // 日期
-            { wch: 8 },  // 类型
-            { wch: 12 }, // 分类
-            { wch: 12 }, // 金额
-            { wch: 20 }  // 描述
-          ];
-          
-          XLSX.utils.book_append_sheet(workbook, worksheet, '收支明细');
-          
-          // 生成文件名
-          let fileName = '收支明细';
-          if (currentStatsType === 'daily') {
-            fileName += `-${document.getElementById('dailyDatePicker').value}`;
-          } else if (currentStatsType === 'monthly') {
-            fileName += `-${document.getElementById('monthlyDatePicker').value}`;
-          } else if (currentStatsType === 'yearly') {
-            fileName += `-${document.getElementById('yearlyDatePicker').value}年`;
+          if (isSummaryView) {
+            // 导出汇总数据
+            const summaryByDate = {};
+            transactions.forEach(t => {
+              if (!summaryByDate[t.date]) {
+                summaryByDate[t.date] = {
+                  incomeCount: 0,
+                  incomeTotal: 0,
+                  expenseCount: 0,
+                  expenseTotal: 0
+                };
+              }
+              if (t.type === 'income') {
+                summaryByDate[t.date].incomeCount++;
+                summaryByDate[t.date].incomeTotal += t.amount;
+              } else {
+                summaryByDate[t.date].expenseCount++;
+                summaryByDate[t.date].expenseTotal += t.amount;
+              }
+            });
+            
+            // 按日期正序排序
+            const sortedDates = Object.keys(summaryByDate).sort((a, b) => new Date(a) - new Date(b));
+            
+            // 计算合计
+            let totalIncomeCount = 0, totalIncome = 0, totalExpenseCount = 0, totalExpense = 0;
+            sortedDates.forEach(date => {
+              const data = summaryByDate[date];
+              totalIncomeCount += data.incomeCount;
+              totalIncome += data.incomeTotal;
+              totalExpenseCount += data.expenseCount;
+              totalExpense += data.expenseTotal;
+            });
+            const totalBalance = totalIncome - totalExpense;
+            
+            const exportData = sortedDates.map(date => {
+              const data = summaryByDate[date];
+              const balance = data.incomeTotal - data.expenseTotal;
+              return {
+                '日期': date,
+                '收入笔数': data.incomeCount,
+                '收入合计': data.incomeTotal.toFixed(2),
+                '支出笔数': data.expenseCount,
+                '支出合计': data.expenseTotal.toFixed(2),
+                '结余': balance.toFixed(2)
+              };
+            });
+            
+            // 添加合计行
+            exportData.push({
+              '日期': '合计',
+              '收入笔数': totalIncomeCount,
+              '收入合计': totalIncome.toFixed(2),
+              '支出笔数': totalExpenseCount,
+              '支出合计': totalExpense.toFixed(2),
+              '结余': totalBalance.toFixed(2)
+            });
+            
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            worksheet['!cols'] = [
+              { wch: 12 }, // 日期
+              { wch: 10 }, // 收入笔数
+              { wch: 12 }, // 收入合计
+              { wch: 10 }, // 支出笔数
+              { wch: 12 }, // 支出合计
+              { wch: 12 }  // 结余
+            ];
+            
+            XLSX.utils.book_append_sheet(workbook, worksheet, '收支汇总');
+            
+            // 生成文件名
+            let fileName = '收支汇总';
+            if (currentStatsType === 'daily') {
+              fileName += `-${document.getElementById('dailyDatePicker').value}`;
+            } else if (currentStatsType === 'monthly') {
+              fileName += `-${document.getElementById('monthlyDatePicker').value}`;
+            } else if (currentStatsType === 'yearly') {
+              fileName += `-${document.getElementById('yearlyDatePicker').value}年`;
+            }
+            fileName += '.xlsx';
+            
+            XLSX.writeFile(workbook, fileName);
+            showNotification('导出成功', `已导出 ${exportData.length} 天的汇总数据`, 'success');
+          } else {
+            // 导出明细数据（按日期正序排序）
+            transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+            const exportData = transactions.map(t => {
+              const category = t.type === 'income' 
+                ? appData.categories.income.find(c => c.id === t.category)
+                : appData.categories.expense.find(c => c.id === t.category);
+              
+              return {
+                '日期': t.date,
+                '类型': t.type === 'income' ? '收入' : '支出',
+                '分类': category ? category.name : '未分类',
+                '金额': t.amount,
+                '描述': t.description || '-'
+              };
+            });
+            
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            worksheet['!cols'] = [
+              { wch: 12 }, // 日期
+              { wch: 8 },  // 类型
+              { wch: 12 }, // 分类
+              { wch: 12 }, // 金额
+              { wch: 20 }  // 描述
+            ];
+            
+            XLSX.utils.book_append_sheet(workbook, worksheet, '收支明细');
+            
+            // 生成文件名
+            let fileName = '收支明细';
+            if (currentStatsType === 'daily') {
+              fileName += `-${document.getElementById('dailyDatePicker').value}`;
+            } else if (currentStatsType === 'monthly') {
+              fileName += `-${document.getElementById('monthlyDatePicker').value}`;
+            } else if (currentStatsType === 'yearly') {
+              fileName += `-${document.getElementById('yearlyDatePicker').value}年`;
+            }
+            fileName += '.xlsx';
+            
+            XLSX.writeFile(workbook, fileName);
+            showNotification('导出成功', `已导出 ${exportData.length} 条记录`, 'success');
           }
-          fileName += '.xlsx';
-          
-          // 导出文件
-          XLSX.writeFile(workbook, fileName);
-          
-          showNotification('导出成功', `已导出 ${exportData.length} 条记录`, 'success');
         });
 
       }
@@ -5369,6 +5154,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         // 渲染交易明细
         renderDailyTransactions(transactions);
+        
+        // 如果汇总视图可见，同步更新汇总数据
+        if (!document.getElementById('transactionsSummaryContainer').classList.contains('hidden')) {
+          updateDailySummary();
+        }
       }
 
       // 更新统计图表
@@ -5742,9 +5532,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           return;
         }
         
-        // 按时间排序
+        // 按时间排序（正序）
         const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-          return new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date);
+          return new Date(a.createdAt || a.date) - new Date(b.createdAt || b.date);
         });
         
         // 渲染表格
@@ -5780,6 +5570,117 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         }).join('');
       }
 
+      // 更新收支汇总（按日期统计）
+      function updateDailySummary() {
+        const tableBody = document.getElementById('dailySummaryTable');
+        let transactions = [];
+
+        // 根据统计类型获取交易数据
+        if (currentStatsType === 'daily') {
+          const date = document.getElementById('dailyDatePicker').value;
+          if (date) {
+            transactions = appData.transactions.filter(t => t.date === date);
+          }
+        } else if (currentStatsType === 'monthly') {
+          const month = document.getElementById('monthlyDatePicker').value;
+          if (month) {
+            transactions = appData.transactions.filter(t => t.date.startsWith(month));
+          }
+        } else if (currentStatsType === 'yearly') {
+          const year = document.getElementById('yearlyDatePicker').value;
+          if (year) {
+            transactions = appData.transactions.filter(t => t.date.startsWith(year));
+          }
+        }
+
+        // 应用筛选器
+        const filterType = document.getElementById('statsFilterType').value;
+        const filterCategory = document.getElementById('statsFilterCategory').value;
+
+        if (filterType !== 'all') {
+          transactions = transactions.filter(t => t.type === filterType);
+        }
+        if (filterCategory !== 'all') {
+          transactions = transactions.filter(t => t.category === filterCategory);
+        }
+
+        if (transactions.length === 0) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
+                ${currentStatsType === 'daily' ? '该日期' : currentStatsType === 'monthly' ? '该月份' : '该年份'}没有交易记录
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        // 按日期分组统计
+        const summaryByDate = {};
+        transactions.forEach(t => {
+          if (!summaryByDate[t.date]) {
+            summaryByDate[t.date] = {
+              incomeCount: 0,
+              incomeTotal: 0,
+              expenseCount: 0,
+              expenseTotal: 0
+            };
+          }
+          if (t.type === 'income') {
+            summaryByDate[t.date].incomeCount++;
+            summaryByDate[t.date].incomeTotal += t.amount;
+          } else {
+            summaryByDate[t.date].expenseCount++;
+            summaryByDate[t.date].expenseTotal += t.amount;
+          }
+        });
+
+        // 按日期排序（正序）
+        const sortedDates = Object.keys(summaryByDate).sort((a, b) => new Date(a) - new Date(b));
+
+        // 计算总计
+        let totalIncomeCount = 0, totalIncome = 0, totalExpenseCount = 0, totalExpense = 0;
+
+        // 渲染表格
+        const rowsHtml = sortedDates.map(date => {
+          const data = summaryByDate[date];
+          const balance = data.incomeTotal - data.expenseTotal;
+          const balanceClass = balance >= 0 ? 'text-secondary' : 'text-danger';
+
+          totalIncomeCount += data.incomeCount;
+          totalIncome += data.incomeTotal;
+          totalExpenseCount += data.expenseCount;
+          totalExpense += data.expenseTotal;
+
+          return `
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${date}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.incomeCount}笔</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary font-medium">¥${data.incomeTotal.toFixed(2)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.expenseCount}笔</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-danger font-medium">¥${data.expenseTotal.toFixed(2)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm ${balanceClass} font-medium">¥${balance.toFixed(2)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        // 添加合计行
+        const totalBalance = totalIncome - totalExpense;
+        const totalBalanceClass = totalBalance >= 0 ? 'text-secondary' : 'text-danger';
+        const totalRowHtml = `
+          <tr class="bg-gray-50 font-semibold">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">合计</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${totalIncomeCount}笔</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary">¥${totalIncome.toFixed(2)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${totalExpenseCount}笔</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-danger">¥${totalExpense.toFixed(2)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm ${totalBalanceClass}">¥${totalBalance.toFixed(2)}</td>
+          </tr>
+        `;
+
+        tableBody.innerHTML = rowsHtml + totalRowHtml;
+      }
+
       // 初始化应用
       initApp();
     });
@@ -5801,13 +5702,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">学习管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="exportStudyDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-purple-600 shadow-lg shadow-purple-600/30 hover:bg-purple-700 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-download mr-2"></i> 导出数据
-            </button>
-            <button id="importStudyDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-upload mr-2"></i> 导入数据
-            </button>
-            <input type="file" id="importStudyDataInput" accept=".json" class="hidden">
             <button id="backToHomeFromStudy" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
               <i class="fa fa-home mr-2"></i> 返回首页
             </button>
@@ -6133,13 +6027,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">家务管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="exportHouseworkDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-teal-600 shadow-lg shadow-teal-600/30 hover:bg-teal-700 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-download mr-2"></i> 导出数据
-            </button>
-            <button id="importHouseworkDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-upload mr-2"></i> 导入数据
-            </button>
-            <input type="file" id="importHouseworkDataInput" accept=".json" class="hidden">
             <button id="backToHomeFromHousework" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
               <i class="fa fa-home mr-2"></i> 返回首页
             </button>
