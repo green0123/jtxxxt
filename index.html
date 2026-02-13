@@ -455,6 +455,25 @@
 
 
   </div>
+
+  <!-- 确认对话框（全局） -->
+  <div id="confirmDialog" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 animate-slide-up">
+      <div class="px-6 py-4">
+        <h3 id="confirmDialogTitle" class="text-lg font-semibold text-gray-800 mb-2">确认操作</h3>
+        <p id="confirmDialogMessage" class="text-sm text-gray-600">您确定要执行此操作吗？</p>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
+        <button id="cancelConfirm" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+          取消
+        </button>
+        <button id="confirmAction" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-danger hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-danger">
+          确认
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="finance-module" class="hidden">
     <!-- 顶部导航栏 -->
     <nav class="bg-white shadow-sm sticky top-0 z-50">
@@ -1297,24 +1316,6 @@
     </div>
   </div>
 
-  <!-- 确认对话框 -->
-  <div id="confirmDialog" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50 hidden">
-    <div class="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 animate-slide-up">
-      <div class="px-6 py-4">
-        <h3 id="confirmDialogTitle" class="text-lg font-semibold text-gray-800 mb-2">确认操作</h3>
-        <p id="confirmDialogMessage" class="text-sm text-gray-600">您确定要执行此操作吗？</p>
-      </div>
-      <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
-        <button id="cancelConfirm" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-          取消
-        </button>
-        <button id="confirmAction" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-danger hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-danger">
-          确认
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- 通知提示 -->
   <div id="notification" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 max-w-md bg-white rounded-lg shadow-lg border-l-4 border-primary p-4 w-11/12 sm:w-auto transition-all duration-300 ease-in-out z-50 font-song" style="display: none;">
     <div class="flex items-center">
@@ -1797,7 +1798,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           btn.classList.add('border-transparent');
         });
         
-        const activeBtn = document.querySelector(`[data-tab="${tab}"]`);
+        // 在指定的导航区域内查找按钮，而不是全局查找
+        const navContainer = document.querySelector(navSelector)?.closest('ul') || document.querySelector(navSelector)?.parentElement;
+        const activeBtn = navContainer ? navContainer.querySelector(`[data-tab="${tab}"]`) : document.querySelector(`${navSelector} [data-tab="${tab}"]`);
         if (activeBtn) {
           activeBtn.classList.add(activeClass, activeBorderClass, activeTextClass);
           activeBtn.classList.remove('border-transparent');
@@ -4860,6 +4863,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         document.querySelectorAll('#tabNav button').forEach(button => {
           const btnTabId = button.getAttribute('data-tab');
           
+          // 清除所有可能的颜色类
+          button.classList.remove('text-indigo-600', 'text-teal-600', 'text-primary', 'border-indigo-600', 'border-teal-600', 'border-primary');
+          
           if (btnTabId === tabId) {
             button.classList.add('bg-primary', 'text-white', 'shadow-lg', 'shadow-primary/30');
             button.classList.remove('bg-white', 'text-gray-700', 'hover:bg-gray-100');
@@ -6450,6 +6456,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         document.getElementById('finance-module').classList.remove('hidden');
         document.getElementById('study-module').classList.add('hidden');
         document.getElementById('housework-module').classList.add('hidden');
+        // 重置财务模块标签页样式
+        switchTab('dashboard');
       });
 
       document.getElementById('backToHomeFromFinance').addEventListener('click', function() {
