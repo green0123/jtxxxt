@@ -6022,24 +6022,33 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       <!-- 我的课程 -->
       <div id="study-courses-tab-content" class="tab-content hidden animate-fade-in">
-        <!-- 添加课程按钮 -->
-        <div class="mb-6 flex justify-between items-center">
-          <h3 class="text-xl font-semibold text-gray-800">我的课程</h3>
-          <button id="addCourseBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all duration-300 flex items-center shadow-lg">
-            <i class="fa fa-plus mr-2"></i> 添加课程
-          </button>
+        <!-- 操作栏 -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <h3 class="text-lg font-semibold text-gray-800">课程列表</h3>
+              <!-- 年份筛选 -->
+              <select id="courseFilterYear" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                <option value="all">全部年份</option>
+              </select>
+              <!-- 状态筛选按钮组 -->
+              <div class="flex bg-gray-100 rounded-lg p-1">
+                <button class="course-filter px-3 py-1.5 rounded-md text-sm font-medium bg-white text-indigo-600 shadow-sm" data-filter="all">全部</button>
+                <button class="course-filter px-3 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800" data-filter="active">进行中</button>
+                <button class="course-filter px-3 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800" data-filter="completed">已完成</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="addCourseBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all duration-300 flex items-center shadow-md hover:shadow-lg">
+                <i class="fa fa-plus mr-2"></i> 添加课程
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- 课程筛选 -->
-        <div class="mb-6 flex flex-wrap gap-2">
-          <button class="course-filter px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white" data-filter="all">全部</button>
-          <button class="course-filter px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200" data-filter="active">进行中</button>
-          <button class="course-filter px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200" data-filter="completed">已完成</button>
-        </div>
-
-        <!-- 课程列表 -->
-        <div id="coursesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div class="col-span-full text-center py-12 text-gray-500">
+        <!-- 课程列表容器 -->
+        <div id="coursesContainer" class="space-y-6">
+          <div class="text-center py-12 text-gray-500">
             <i class="fa fa-graduation-cap text-5xl mb-4 text-gray-300"></i>
             <p class="text-lg">暂无课程</p>
             <p class="text-sm mt-2">点击"添加课程"开始添加您的学习课程</p>
@@ -6314,7 +6323,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         </div>
 
         <!-- 待办家务列表 -->
-        <div id="pendingHouseworkContainer" class="space-y-4">
+        <div id="pendingHouseworkContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div class="text-center py-12 text-gray-500">
             <i class="fa fa-list-ul text-5xl mb-4 text-gray-300"></i>
             <p class="text-lg">暂无待办家务</p>
@@ -6360,7 +6369,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         </div>
 
         <!-- 进行中家务列表 -->
-        <div id="inprogressHouseworkContainer" class="space-y-4">
+        <div id="inprogressHouseworkContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div class="text-center py-12 text-gray-500">
             <i class="fa fa-spinner text-5xl mb-4 text-gray-300"></i>
             <p class="text-lg">暂无进行中的家务</p>
@@ -6381,6 +6390,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <input type="text" id="completedHouseworkSearchInput" placeholder="搜索家务..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <div class="flex gap-2">
+              <select id="completedHouseworkFilterYear" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                <option value="all">全部年份</option>
+              </select>
               <select id="completedHouseworkFilterPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
                 <option value="all">全部优先级</option>
                 <option value="high">高优先级</option>
@@ -6672,10 +6684,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         </div>
 
         <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-medium mb-2">关联课程</label>
-          <select id="monthlyPlanCourse" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-            <option value="">选择关联课程（可选）</option>
-          </select>
+          <label class="block text-gray-700 text-sm font-medium mb-2">关联课程（可多选）</label>
+          <div id="monthlyPlanCourses" class="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 border border-gray-300 rounded-md">
+            <div class="text-sm text-gray-500 text-center py-4 col-span-full">请选择关联课程</div>
+          </div>
         </div>
 
         <div class="mb-4">
@@ -6711,15 +6723,37 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       <form id="weeklyPlanForm">
         <input type="hidden" id="weeklyPlanId">
 
-        <!-- 第一步：选择关联月计划 -->
-        <div class="mb-6">
-          <label class="block text-gray-700 text-sm font-medium mb-2">
-            关联月计划 <span class="text-red-500">*</span>
-          </label>
-          <select id="weeklyPlanMonthly" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" onchange="onMonthlyPlanChange()">
-            <option value="">请选择月计划</option>
-          </select>
+        <!-- 第一步：选择年月 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">年份 *</label>
+            <select id="weeklyPlanYear" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" onchange="onWeeklyPlanYearMonthChange()">
+              <option value="2024">2024</option>
+              <option value="2025" selected>2025</option>
+              <option value="2026">2026</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">月份 *</label>
+            <select id="weeklyPlanMonth" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" onchange="onWeeklyPlanYearMonthChange()">
+              <option value="1">1月</option>
+              <option value="2">2月</option>
+              <option value="3">3月</option>
+              <option value="4">4月</option>
+              <option value="5">5月</option>
+              <option value="6">6月</option>
+              <option value="7">7月</option>
+              <option value="8">8月</option>
+              <option value="9">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+              <option value="12">12月</option>
+            </select>
+          </div>
         </div>
+
+        <!-- 关联月计划（隐藏字段） -->
+        <input type="hidden" id="weeklyPlanMonthly">
 
         <!-- 月计划信息展示区（选择后显示） -->
         <div id="monthlyPlanInfo" class="mb-6 hidden">
@@ -6773,27 +6807,54 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
   <!-- 添加课程模态框 -->
   <div id="addCourseModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 animate-slide-up">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-bold text-gray-800" id="courseModalTitle">添加课程</h3>
-        <button class="text-gray-500 hover:text-gray-700" onclick="closeModal('addCourseModal')">
-          <i class="fa fa-times"></i>
-        </button>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-slide-up">
+      <!-- 头部 -->
+      <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-5 text-white rounded-t-2xl">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="text-xl font-bold" id="courseModalTitle">添加课程</h3>
+            <p class="text-indigo-100 text-sm mt-1">填写课程基本信息</p>
+          </div>
+          <button onclick="closeModal('addCourseModal')" class="text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-lg transition-colors">
+            <i class="fa fa-times text-xl"></i>
+          </button>
+        </div>
       </div>
-      <form id="courseForm">
+
+      <form id="courseForm" class="p-6">
         <input type="hidden" id="courseId">
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-medium mb-2">课程名称 *</label>
-          <input type="text" id="courseName" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：Python基础入门">
+
+        <!-- 课程名称 -->
+        <div class="mb-5">
+          <label class="block text-gray-700 text-sm font-medium mb-2">课程名称 <span class="text-red-500">*</span></label>
+          <input type="text" id="courseName" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-base" placeholder="例如：Python基础入门">
         </div>
 
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-medium mb-2">总课时 *</label>
-          <input type="number" id="courseTotalLessons" min="1" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：30">
+        <!-- 年份和总课时 -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">所属年份 <span class="text-red-500">*</span></label>
+            <select id="courseYear" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-base bg-white">
+              <option value="2026">2026年</option>
+              <option value="2027">2027年</option>
+              <option value="2028">2028年</option>
+              <option value="2029">2029年</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">总课时 <span class="text-red-500">*</span></label>
+            <input type="number" id="courseTotalLessons" min="1" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-base" placeholder="例如：30">
+          </div>
         </div>
-        <div class="flex justify-end space-x-3">
-          <button type="button" onclick="closeModal('addCourseModal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md">取消</button>
-          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">保存</button>
+
+        <!-- 底部按钮 -->
+        <div class="flex justify-end space-x-3 pt-2">
+          <button type="button" onclick="closeModal('addCourseModal')" class="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors">
+            取消
+          </button>
+          <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-purple-700 transition-all shadow-md hover:shadow-lg">
+            <i class="fa fa-save mr-2"></i>保存课程
+          </button>
         </div>
       </form>
     </div>
@@ -6879,6 +6940,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // updatePlanStatistics(); // 已移除顶部显示模块
       updateMonthlyPlanLinkCard();
       renderCourses();
+      updateCourseYearFilter();
       renderStudyRecords();
       initStudyCharts();
 
@@ -6987,14 +7049,25 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       document.querySelectorAll('.course-filter').forEach(btn => {
         btn.addEventListener('click', function() {
           document.querySelectorAll('.course-filter').forEach(b => {
-            b.classList.remove('bg-indigo-600', 'text-white');
-            b.classList.add('bg-gray-100', 'text-gray-700');
+            b.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
+            b.classList.add('text-gray-600');
           });
-          this.classList.remove('bg-gray-100', 'text-gray-700');
-          this.classList.add('bg-indigo-600', 'text-white');
-          renderCourses(this.dataset.filter);
+          this.classList.remove('text-gray-600');
+          this.classList.add('bg-white', 'text-indigo-600', 'shadow-sm');
+          const yearFilter = document.getElementById('courseFilterYear')?.value || 'all';
+          renderCourses(this.dataset.filter, yearFilter);
         });
       });
+
+      // 年份筛选事件
+      const courseYearFilter = document.getElementById('courseFilterYear');
+      if (courseYearFilter) {
+        courseYearFilter.addEventListener('change', function() {
+          const activeFilter = document.querySelector('.course-filter.bg-white');
+          const statusFilter = activeFilter ? activeFilter.dataset.filter : 'all';
+          renderCourses(statusFilter, this.value);
+        });
+      }
 
       // 学习时间图表筛选
       document.querySelectorAll('.time-filter-study').forEach(btn => {
@@ -7253,40 +7326,54 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       yearSelect.value = now.getFullYear();
       monthSelect.value = now.getMonth() + 1;
 
-      // 填充课程选择器
-      courseSelect.innerHTML = '<option value="">选择关联课程</option>';
-      studyData.courses.forEach(course => {
-        const option = document.createElement('option');
-        option.value = course.id;
-        option.textContent = course.name;
-        courseSelect.appendChild(option);
-      });
+      // 填充课程选择器（多选）
+      const coursesContainer = document.getElementById('monthlyPlanCourses');
+      if (coursesContainer) {
+        coursesContainer.innerHTML = '';
+        studyData.courses.forEach(course => {
+          const courseItem = document.createElement('div');
+          courseItem.className = 'flex items-center gap-2 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-200 cursor-pointer';
+          courseItem.dataset.courseId = course.id;
+          courseItem.innerHTML = `
+            <input type="checkbox" id="course-${course.id}" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+            <label for="course-${course.id}" class="flex items-center gap-1 cursor-pointer">
+              <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
+                <i class="fa fa-graduation-cap text-indigo-600 text-xs"></i>
+              </div>
+              <span class="text-sm font-medium text-gray-700">${course.name}</span>
+            </label>
+          `;
+          coursesContainer.appendChild(courseItem);
+        });
+      }
       
       // 添加课程选择事件监听器，关联课程时长到学习目标
-      courseSelect.onchange = function() {
-        const selectedCourseId = this.value;
-        if (selectedCourseId) {
-          const course = studyData.courses.find(c => c.id === selectedCourseId);
-          if (course) {
-            const goalTextarea = document.getElementById('monthlyPlanGoal');
-            const targetHoursInput = document.getElementById('monthlyPlanTargetHours');
-            const currentGoal = goalTextarea.value;
-            const courseGoal = `课程: ${course.name}\n总时长: ${course.totalLessons}小时\n目标: 完成课程的${Math.round(course.totalLessons * 0.25)}小时学习`;
+      document.querySelectorAll('#monthlyPlanCourses input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+          const selectedCourses = Array.from(document.querySelectorAll('#monthlyPlanCourses input[type="checkbox"]:checked'))
+            .map(checkbox => studyData.courses.find(c => c.id === checkbox.parentElement.dataset.courseId));
+          
+          const goalTextarea = document.getElementById('monthlyPlanGoal');
+          const targetHoursInput = document.getElementById('monthlyPlanTargetHours');
+          
+          if (selectedCourses.length > 0) {
+            const courseGoals = selectedCourses.map(course => {
+              const monthlyHours = Math.round(course.totalLessons / 12);
+              return `课程: ${course.name}\n总时长: ${course.totalLessons}小时\n目标: 完成课程的${monthlyHours}小时学习`;
+            }).join('\n\n');
             
-            if (!currentGoal) {
-              goalTextarea.value = courseGoal;
-            } else if (!currentGoal.includes(course.name)) {
-              goalTextarea.value = currentGoal + '\n\n' + courseGoal;
-            }
+            goalTextarea.value = courseGoals;
             
-            // 自动填充目标学习时长为课程总时长的25%
-            targetHoursInput.value = Math.round(course.totalLessons * 0.25);
+            // 自动填充目标学习时长为所有课程总时长的1/12（年度平均）
+            const totalLessons = selectedCourses.reduce((sum, course) => sum + course.totalLessons, 0);
+            targetHoursInput.value = Math.round(totalLessons / 12);
+          } else {
+            // 清空目标和时长
+            goalTextarea.value = '';
+            targetHoursInput.value = '';
           }
-        } else {
-          // 清空目标学习时长
-          document.getElementById('monthlyPlanTargetHours').value = '';
-        }
-      };
+        });
+      });
 
       if (planId) {
         const plan = studyData.monthlyPlans.find(p => p.id === planId);
@@ -7297,7 +7384,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           monthSelect.value = plan.month;
           document.getElementById('monthlyPlanGoal').value = plan.goal;
           document.getElementById('monthlyPlanTargetHours').value = plan.targetHours || '';
-          courseSelect.value = plan.courseId || '';
+          
+          // 选中已关联的课程
+          const selectedCourseIds = plan.courseIds || (plan.courseId ? [plan.courseId] : []);
+          document.querySelectorAll('#monthlyPlanCourses input[type="checkbox"]').forEach(checkbox => {
+            const courseId = checkbox.parentElement.dataset.courseId;
+            checkbox.checked = selectedCourseIds.includes(courseId);
+          });
         }
       } else {
         title.textContent = '添加月计划';
@@ -7324,13 +7417,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return;
       }
 
+      // 获取选中的课程
+      const selectedCourses = Array.from(document.querySelectorAll('#monthlyPlanCourses input[type="checkbox"]:checked'))
+        .map(checkbox => checkbox.parentElement.dataset.courseId);
+      
       const planData = {
         id: id || Date.now().toString(),
         year: year,
         month: month,
         goal: document.getElementById('monthlyPlanGoal').value,
         targetHours: parseFloat(document.getElementById('monthlyPlanTargetHours').value),
-        courseId: document.getElementById('monthlyPlanCourse').value || null,
+        courseId: selectedCourses.length > 0 ? selectedCourses[0] : null,
+        courseIds: selectedCourses,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         completed: false
@@ -7388,7 +7486,54 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return;
       }
 
-      container.innerHTML = sortedPlans.map(plan => {
+      // 按年份分组
+      const groupedPlans = {};
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+
+      sortedPlans.forEach(plan => {
+        const yearKey = plan.year.toString();
+        if (!groupedPlans[yearKey]) {
+          groupedPlans[yearKey] = {
+            year: plan.year,
+            plans: [],
+            isCurrentYear: plan.year === currentYear
+          };
+        }
+        groupedPlans[yearKey].plans.push(plan);
+      });
+
+      // 生成分组显示的 HTML
+      let html = '';
+      
+      // 按年份倒序
+      Object.keys(groupedPlans).sort((a, b) => b - a).forEach(yearKey => {
+        const yearData = groupedPlans[yearKey];
+        const isCurrentYear = yearData.isCurrentYear;
+        
+        html += `
+          <div class="mb-8">
+            <!-- 年份标题 -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center">
+                <i class="fa fa-calendar mr-2 text-lg"></i>
+                <span class="font-bold text-lg">${yearData.year}年</span>
+                ${isCurrentYear ? '<span class="ml-2 bg-white/20 text-white text-xs px-2 py-1 rounded-full">今年</span>' : ''}
+              </div>
+              <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                <span class="text-sm text-gray-500">月计划数量：</span>
+                <span class="font-bold text-indigo-600">${yearData.plans.length}</span>
+                <span class="text-sm text-gray-500"> 个</span>
+              </div>
+            </div>
+            
+            <!-- 月计划卡片网格 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        `;
+        
+        // 渲染该年份的所有月计划
+        html += yearData.plans.map(plan => {
         // 从学习目标中提取所有匹配的课程
         const matchedCourses = [];
         studyData.courses.forEach(course => {
@@ -7487,6 +7632,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           </div>
         `;
       }).join('');
+        
+        // 关闭年份分组的 div
+        html += `
+            </div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
     }
 
     // 切换月计划完成状态
@@ -7619,22 +7773,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const modal = document.getElementById('weeklyPlanModal');
       const title = document.getElementById('weeklyPlanModalTitle');
       const form = document.getElementById('weeklyPlanForm');
-      const monthSelect = document.getElementById('weeklyPlanMonthly');
+      const yearSelect = document.getElementById('weeklyPlanYear');
+      const monthSelect = document.getElementById('weeklyPlanMonth');
       const monthlyPlanInfo = document.getElementById('monthlyPlanInfo');
       const weekSelector = document.getElementById('weekSelector');
 
       form.reset();
       monthlyPlanInfo.classList.add('hidden');
-      weekSelector.innerHTML = '<div class="col-span-full text-sm text-gray-500 text-center py-4">请先选择月计划</div>';
+      weekSelector.innerHTML = '<div class="col-span-full text-sm text-gray-500 text-center py-4">请先选择年份和月份</div>';
 
-      // 填充月计划选择器
-      monthSelect.innerHTML = '<option value="">请选择月计划</option>';
-      studyData.monthlyPlans.forEach(plan => {
-        const option = document.createElement('option');
-        option.value = plan.id;
-        option.textContent = `${plan.year}年${plan.month}月`;
-        monthSelect.appendChild(option);
-      });
+      // 设置默认值为当前年月
+      const now = new Date();
+      yearSelect.value = now.getFullYear();
+      monthSelect.value = now.getMonth() + 1;
 
       if (planId) {
         const plan = studyData.weeklyPlans.find(p => p.id === planId);
@@ -7644,29 +7795,40 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           document.getElementById('weeklyPlanGoal').value = plan.goal;
           document.getElementById('weeklyPlanTargetHours').value = plan.targetHours;
 
-          if (plan.monthId) {
-            monthSelect.value = plan.monthId;
-            onMonthlyPlanChange(); // 这会自动高亮选中的周
+          // 查找关联的月计划来设置年月
+          const monthlyPlan = studyData.monthlyPlans.find(p => p.id === plan.monthId);
+          if (monthlyPlan) {
+            yearSelect.value = monthlyPlan.year;
+            monthSelect.value = monthlyPlan.month;
+            document.getElementById('weeklyPlanMonthly').value = plan.monthId;
+            onWeeklyPlanYearMonthChange(); // 这会自动高亮选中的周
           }
         }
       } else {
         title.textContent = '添加周计划';
         document.getElementById('weeklyPlanId').value = '';
+        document.getElementById('weeklyPlanMonthly').value = '';
+        // 触发一次年月变化，查找对应的月计划
+        onWeeklyPlanYearMonthChange();
       }
 
       modal.classList.remove('hidden');
     }
 
-    // 当月计划选择变化时
-    function onMonthlyPlanChange() {
-      const monthSelect = document.getElementById('weeklyPlanMonthly');
-      const monthlyPlanId = monthSelect.value;
+    // 当年份或月份选择变化时
+    function onWeeklyPlanYearMonthChange() {
+      const yearSelect = document.getElementById('weeklyPlanYear');
+      const monthSelect = document.getElementById('weeklyPlanMonth');
+      const monthIdInput = document.getElementById('weeklyPlanMonthly');
       const monthlyPlanInfo = document.getElementById('monthlyPlanInfo');
       const monthlyPlanGoalDisplay = document.getElementById('monthlyPlanGoalDisplay');
       const monthlyPlanCourses = document.getElementById('monthlyPlanCourses');
       const weekSelector = document.getElementById('weekSelector');
       const editingPlanId = document.getElementById('weeklyPlanId').value;
       let editingWeekInMonth = null;
+
+      const year = parseInt(yearSelect.value);
+      const month = parseInt(monthSelect.value);
 
       // 如果是编辑模式，获取当前周计划的月内周序号
       if (editingPlanId) {
@@ -7676,16 +7838,25 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         }
       }
 
-      if (!monthlyPlanId) {
+      if (!year || !month) {
         monthlyPlanInfo.classList.add('hidden');
-        weekSelector.innerHTML = '<div class="col-span-full text-sm text-gray-500 text-center py-4">请先选择月计划</div>';
+        weekSelector.innerHTML = '<div class="col-span-full text-sm text-gray-500 text-center py-4">请先选择年份和月份</div>';
+        monthIdInput.value = '';
         return;
       }
 
-      const monthlyPlan = studyData.monthlyPlans.find(p => p.id === monthlyPlanId);
+      // 根据年月查找对应的月计划
+      const monthlyPlan = studyData.monthlyPlans.find(p => p.year === year && p.month === month);
+      
       if (!monthlyPlan) {
+        monthlyPlanInfo.classList.add('hidden');
+        weekSelector.innerHTML = `<div class="col-span-full text-sm text-orange-500 text-center py-4">${year}年${month}月没有对应的月计划，请先创建月计划</div>`;
+        monthIdInput.value = '';
         return;
       }
+
+      // 保存找到的月计划ID
+      monthIdInput.value = monthlyPlan.id;
 
       // 显示月计划信息
       monthlyPlanGoalDisplay.textContent = monthlyPlan.goal;
@@ -7746,7 +7917,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
         // 检查该周是否已有周计划（排除当前正在编辑的周计划）
         const existingPlan = studyData.weeklyPlans.find(p =>
-          p.monthId === monthlyPlanId && p.weekInMonth === weekNum && p.id !== editingPlanId
+          p.monthId === monthlyPlan.id && p.weekInMonth === weekNum && p.id !== editingPlanId
         );
         const isTaken = !!existingPlan;
         const isSelected = weekNum === editingWeekInMonth;
@@ -7768,7 +7939,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             type="button"
             data-week="${weekNum}"
             data-week-in-month="${weekNum}"
-            onclick="selectWeek(${weekNum})"
+            onclick="${isTaken ? 'return false;' : `selectWeek(${weekNum})`}"
             class="${buttonClasses}"
             ${isTaken ? 'disabled' : ''}
           >
@@ -7784,6 +7955,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     // 选择周
     function selectWeek(weekNum) {
       const weekSelector = document.getElementById('weekSelector');
+      
+      // 检查该周是否已被占用
+      const selectedBtn = weekSelector.querySelector(`[data-week="${weekNum}"]`);
+      if (selectedBtn && selectedBtn.disabled) {
+        return; // 已占用的周不能被选中
+      }
+      
       // 移除所有选中状态
       weekSelector.querySelectorAll('button').forEach(btn => {
         btn.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-50', 'border-indigo-500');
@@ -7791,11 +7969,64 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
 
       // 添加选中状态
-      const selectedBtn = weekSelector.querySelector(`[data-week="${weekNum}"]`);
       if (selectedBtn) {
         selectedBtn.classList.remove('border-gray-200');
         selectedBtn.classList.add('ring-2', 'ring-indigo-500', 'bg-indigo-50', 'border-indigo-500');
       }
+
+      // 自动生成本周学习目标
+      generateWeeklyGoal(weekNum);
+    }
+
+    // 根据月计划生成本周学习目标
+    function generateWeeklyGoal(weekNum) {
+      const monthId = document.getElementById('weeklyPlanMonthly').value;
+      if (!monthId) return;
+
+      const monthlyPlan = studyData.monthlyPlans.find(p => p.id === monthId);
+      if (!monthlyPlan) return;
+
+      // 提取月计划中的课程
+      const matchedCourses = [];
+      studyData.courses.forEach(course => {
+        if (monthlyPlan.goal.includes(course.name)) {
+          matchedCourses.push(course);
+        }
+      });
+
+      if (matchedCourses.length === 0) return;
+
+      // 计算本周总学习时长（月计划目标时长 ÷ 4）
+      const weeklyTargetHours = Math.round(monthlyPlan.targetHours / 4);
+      document.getElementById('weeklyPlanTargetHours').value = weeklyTargetHours;
+
+      // 分配每个课程的学习时长，确保总和等于本周总学习时长
+      const courseHours = [];
+      const numCourses = matchedCourses.length;
+      
+      // 基础分配：平均分配
+      const baseHours = Math.floor(weeklyTargetHours / numCourses);
+      const remainder = weeklyTargetHours % numCourses;
+      
+      // 分配基础时长
+      for (let i = 0; i < numCourses; i++) {
+        courseHours.push(baseHours);
+      }
+      
+      // 分配剩余时长（前remainder个课程各加1小时）
+      for (let i = 0; i < remainder; i++) {
+        courseHours[i] += 1;
+      }
+
+      // 生成本周学习目标
+      const weeklyGoals = matchedCourses.map((course, index) => {
+        const monthlyHours = Math.round(course.totalLessons / 12);
+        const weeklyHours = courseHours[index];
+        return `课程: ${course.name}\n月目标: ${monthlyHours}小时\n本周目标: ${weeklyHours}小时（第${weekNum}周）`;
+      }).join('\n\n');
+
+      // 填充本周学习目标
+      document.getElementById('weeklyPlanGoal').value = weeklyGoals;
     }
 
     async function saveWeeklyPlan(e) {
@@ -7840,6 +8071,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const planData = {
         id: id || Date.now().toString(),
         year: monthlyPlan.year,
+        month: monthlyPlan.month,
         week: standardWeek,
         weekInMonth: weekInMonth,
         goal: document.getElementById('weeklyPlanGoal').value,
@@ -7897,18 +8129,88 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return;
       }
 
-        const now = new Date();
-        // 设置为当天开始（0点0分0秒）
-        now.setHours(0, 0, 0, 0);
-        const currentWeek = getWeekNumber(now);
-        const currentYear = now.getFullYear();
+      // 按年月分组
+      const groupedPlans = {};
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const currentWeek = getWeekNumber(now);
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
 
-        container.innerHTML = sortedPlans.map(plan => {
+      sortedPlans.forEach(plan => {
+        // 获取关联的月计划信息
+        const monthlyPlan = studyData.monthlyPlans.find(p => p.id === plan.monthId);
+        let year, month;
+
+        if (monthlyPlan) {
+          year = monthlyPlan.year;
+          month = monthlyPlan.month;
+        } else if (plan.month) {
+          // 计划本身有月份信息
+          year = plan.year;
+          month = plan.month;
+        } else if (plan.weekInMonth) {
+          // 有 weekInMonth 但没有月份信息，根据 weekInMonth 推断
+          year = plan.year;
+          month = Math.ceil(plan.weekInMonth / 4.33);
+        } else {
+          // 独立周计划，根据周数估算月份
+          year = plan.year;
+          month = Math.min(12, Math.max(1, Math.ceil(plan.week / 4.33)));
+        }
+
+        // 确保 month 是有效的数字
+        month = parseInt(month) || 1;
+        year = parseInt(year) || currentYear;
+
+        const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
+
+        if (!groupedPlans[monthKey]) {
+          groupedPlans[monthKey] = {
+            year: year,
+            month: month,
+            monthName: getMonthName(month.toString()),
+            plans: [],
+            isCurrentMonth: year === currentYear && month === currentMonth
+          };
+        }
+        groupedPlans[monthKey].plans.push(plan);
+      });
+
+      // 生成分组显示的 HTML
+      let html = '';
+      
+      // 按年月倒序
+      Object.keys(groupedPlans).sort((a, b) => b.localeCompare(a)).forEach(monthKey => {
+        const monthData = groupedPlans[monthKey];
+        const isCurrentMonth = monthData.isCurrentMonth;
+        
+        html += `
+          <div class="mb-8">
+            <!-- 年月标题 -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center">
+                <i class="fa fa-calendar mr-2 text-lg"></i>
+                <span class="font-bold text-lg">${monthData.year}年 ${monthData.monthName}</span>
+                ${isCurrentMonth ? '<span class="ml-2 bg-white/20 text-white text-xs px-2 py-1 rounded-full">本月</span>' : ''}
+              </div>
+              <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                <span class="text-sm text-gray-500">周计划数量：</span>
+                <span class="font-bold text-indigo-600">${monthData.plans.length}</span>
+                <span class="text-sm text-gray-500"> 个</span>
+              </div>
+            </div>
+            
+            <!-- 周计划卡片网格 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        `;
+
+        html += monthData.plans.map(plan => {
           // 根据weekInMonth计算该周的日期范围（每月固定4周）
           let dateRange;
           const monthlyPlan = studyData.monthlyPlans.find(p => p.id === plan.monthId);
 
-          if (monthlyPlan && plan.weekInMonth) {
+          if (monthlyPlan && plan.weekInMonth && plan.weekInMonth >= 1 && plan.weekInMonth <= 4) {
             const monthEnd = new Date(monthlyPlan.year, monthlyPlan.month, 0);
             const totalDaysInMonth = monthEnd.getDate();
 
@@ -8025,16 +8327,16 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <div class="text-xs font-semibold text-indigo-600 mb-2">
                 <i class="fa fa-bullseye mr-1"></i>本周学习目标：
               </div>
-              <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg leading-relaxed">${plan.goal}</div>
+              <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg leading-relaxed">${plan.goal || '暂无学习目标'}</div>
             </div>
 
             <!-- 学习进度 -->
             <div class="mb-4 flex items-center gap-2">
               <span class="text-xs text-gray-500">学习进度:</span>
               <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
+                <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
               </div>
-              <span class="text-xs font-medium text-blue-600">${actualHours}/${plan.targetHours}h</span>
+              <span class="text-xs font-medium text-indigo-600">${actualHours}/${plan.targetHours}h</span>
             </div>
 
             <!-- 操作按钮 -->
@@ -8049,6 +8351,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           </div>
         `;
       }).join('');
+      
+      // 关闭年月分组的 div
+      html += `
+            </div>
+          </div>
+      `;
+      });
+
+      container.innerHTML = html;
     }
 
     async function toggleWeeklyPlanComplete(planId) {
@@ -8537,9 +8848,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const modal = document.getElementById('addCourseModal');
       const title = document.getElementById('courseModalTitle');
       const form = document.getElementById('courseForm');
-      
+
       form.reset();
-      
+
+      // 设置默认年份为当前年份
+      const currentYear = new Date().getFullYear();
+      document.getElementById('courseYear').value = currentYear;
+
       if (courseId) {
         const course = studyData.courses.find(c => c.id === courseId);
         if (course) {
@@ -8547,15 +8862,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           document.getElementById('courseId').value = course.id;
           document.getElementById('courseName').value = course.name;
           document.getElementById('courseTotalLessons').value = course.totalLessons;
-          document.getElementById('courseCompletedLessons').value = course.completedLessons || 0;
-          document.getElementById('courseProgress').value = course.progress || 0;
-          document.getElementById('courseStatus').value = course.status;
+          // 设置年份
+          if (course.createdAt) {
+            const courseYear = new Date(course.createdAt).getFullYear();
+            document.getElementById('courseYear').value = courseYear;
+          }
         }
       } else {
         title.textContent = '添加课程';
         document.getElementById('courseId').value = '';
       }
-      
+
       modal.classList.remove('hidden');
     }
 
@@ -8563,32 +8880,34 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       e.preventDefault();
       const id = document.getElementById('courseId').value;
       const courseName = document.getElementById('courseName').value;
-      
+      const totalLessons = parseInt(document.getElementById('courseTotalLessons').value);
+      const selectedYear = parseInt(document.getElementById('courseYear').value);
+
       // 检查课程名称是否重复
-      const isDuplicate = studyData.courses.some(course => 
+      const isDuplicate = studyData.courses.some(course =>
         course.name === courseName && course.id !== id
       );
-      
+
       if (isDuplicate) {
         alert('该课程名称已存在，请使用不同的名称。');
-        closeModal('addCourseModal');
         return;
       }
-      
+
       const courseData = {
         id: id || Date.now().toString(),
         name: courseName,
-        totalLessons: parseInt(document.getElementById('courseTotalLessons').value),
-        completedLessons: 0,
-        progress: 0,
-        status: 'active',
-        createdAt: id ? studyData.courses.find(c => c.id === id)?.createdAt : new Date().toISOString()
+        totalLessons: totalLessons,
+        completedLessons: id ? (studyData.courses.find(c => c.id === id)?.completedLessons || 0) : 0,
+        progress: id ? (studyData.courses.find(c => c.id === id)?.progress || 0) : 0,
+        status: id ? (studyData.courses.find(c => c.id === id)?.status || 'active') : 'active',
+        createdAt: id ? studyData.courses.find(c => c.id === id)?.createdAt : new Date(selectedYear, 0, 1).toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       if (id) {
         const index = studyData.courses.findIndex(c => c.id === id);
         if (index !== -1) {
-          studyData.courses[index] = courseData;
+          studyData.courses[index] = { ...studyData.courses[index], ...courseData };
         }
       } else {
         studyData.courses.push(courseData);
@@ -8599,6 +8918,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       renderCourses();
       updateStudyDashboard();
       updateStudyCharts();
+      updateCourseYearFilter();
+      showNotification('成功', id ? '课程已更新' : '课程已添加', 'success');
     }
 
     async function deleteCourse(id) {
@@ -8606,25 +8927,40 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         studyData.courses = studyData.courses.filter(c => c.id !== id);
         await saveStudyData();
         renderCourses();
+        updateCourseYearFilter();
         updateStudyDashboard();
         updateStudyCharts();
       }
     }
 
-    function renderCourses(filter = 'all') {
+    function renderCourses(filter = 'all', yearFilter = 'all') {
       const container = document.getElementById('coursesContainer');
       if (!container) return;
 
       let filteredCourses = studyData.courses;
+      
+      // 状态筛选
       if (filter === 'active') {
-        filteredCourses = studyData.courses.filter(c => c.status === 'active');
+        filteredCourses = filteredCourses.filter(c => c.status === 'active');
       } else if (filter === 'completed') {
-        filteredCourses = studyData.courses.filter(c => c.status === 'completed');
+        filteredCourses = filteredCourses.filter(c => c.status === 'completed');
+      }
+      
+      // 年份筛选
+      if (yearFilter !== 'all') {
+        const selectedYear = parseInt(yearFilter);
+        filteredCourses = filteredCourses.filter(c => {
+          if (c.createdAt) {
+            const courseDate = new Date(c.createdAt);
+            return courseDate.getFullYear() === selectedYear;
+          }
+          return false;
+        });
       }
 
       if (filteredCourses.length === 0) {
         container.innerHTML = `
-          <div class="col-span-full text-center py-12 text-gray-500">
+          <div class="text-center py-12 text-gray-500 bg-white rounded-xl shadow-sm border border-gray-100">
             <i class="fa fa-graduation-cap text-5xl mb-4 text-gray-300"></i>
             <p class="text-lg">暂无${filter === 'all' ? '' : filter === 'active' ? '进行中' : '已完成'}课程</p>
             <p class="text-sm mt-2">点击"添加课程"开始添加您的学习课程</p>
@@ -8634,59 +8970,154 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
 
       const statusColors = {
-        active: { bg: 'bg-indigo-100', text: 'text-indigo-800', icon: 'fa-play-circle' },
-        paused: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: 'fa-pause-circle' },
-        completed: { bg: 'bg-green-100', text: 'text-green-800', icon: 'fa-check-circle' }
+        active: { bg: 'bg-blue-100', text: 'text-blue-700', icon: 'fa-play-circle', gradient: 'from-blue-500 to-blue-600' },
+        paused: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'fa-pause-circle', gradient: 'from-yellow-500 to-yellow-600' },
+        completed: { bg: 'bg-green-100', text: 'text-green-700', icon: 'fa-check-circle', gradient: 'from-green-500 to-green-600' }
       };
 
       const statusLabels = { active: '进行中', paused: '暂停', completed: '已完成' };
 
-      container.innerHTML = filteredCourses.map(course => {
-        const colors = statusColors[course.status] || statusColors.active;
-        
-        // 查找关联的月计划
-        const relatedMonthlyPlans = studyData.monthlyPlans.filter(p => p.courseId === course.id);
-        
-        return `
-          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="p-6">
-              <div class="flex items-start justify-between mb-3">
-                <div class="flex items-center">
-                  <div class="${colors.bg} p-3 rounded-full mr-3">
-                    <i class="fa fa-graduation-cap ${colors.text}"></i>
-                  </div>
-                  <div>
-                    <h4 class="text-lg font-semibold text-gray-800">${course.name}</h4>
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text} mt-1">
-                      <i class="fa ${colors.icon} mr-1"></i>
-                      ${statusLabels[course.status]}
-                    </span>
-                  </div>
+      // 按年份分组
+      const groupedCourses = {};
+      const now = new Date();
+      const currentYear = now.getFullYear();
+
+      filteredCourses.forEach(course => {
+        if (course.createdAt) {
+          const courseDate = new Date(course.createdAt);
+          const yearKey = courseDate.getFullYear().toString();
+
+          if (!groupedCourses[yearKey]) {
+            groupedCourses[yearKey] = {
+              year: courseDate.getFullYear(),
+              isCurrentYear: courseDate.getFullYear() === currentYear,
+              courses: [],
+              totalDuration: 0,
+              completedDuration: 0,
+              activeCount: 0,
+              completedCount: 0
+            };
+          }
+
+          groupedCourses[yearKey].courses.push(course);
+          groupedCourses[yearKey].totalDuration += course.totalLessons || 0;
+          groupedCourses[yearKey].completedDuration += course.completedLessons || 0;
+          if (course.status === 'active') groupedCourses[yearKey].activeCount++;
+          if (course.status === 'completed') groupedCourses[yearKey].completedCount++;
+        }
+      });
+
+      // 生成分组显示的 HTML
+      let html = '';
+
+      // 按年份倒序
+      Object.keys(groupedCourses).sort((a, b) => b - a).forEach(yearKey => {
+        const yearData = groupedCourses[yearKey];
+        const isCurrentYear = yearData.isCurrentYear;
+        const yearProgress = yearData.totalDuration > 0 ? Math.round((yearData.completedDuration / yearData.totalDuration) * 100) : 0;
+
+        html += `
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <!-- 年份标题区域 -->
+            <div class="bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 p-4">
+              <div class="flex items-center">
+                <div class="bg-white/20 backdrop-blur-sm p-2 rounded-lg mr-3">
+                  <i class="fa fa-calendar text-white text-lg"></i>
                 </div>
-                <div class="flex space-x-2">
-                  <button onclick="deleteCourse('${course.id}')" class="text-gray-500 hover:text-red-600">
+                <div>
+                  <h3 class="text-white font-bold text-lg">${yearData.year}年课程</h3>
+                  <p class="text-indigo-100 text-sm">${yearData.courses.length}门课程 · ${yearData.totalDuration}课时</p>
+                </div>
+                ${isCurrentYear ? '<span class="ml-3 bg-white text-indigo-600 text-xs font-bold px-2 py-1 rounded-full">今年</span>' : ''}
+              </div>
+            </div>
+
+            <!-- 课程卡片网格 -->
+            <div class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        `;
+
+        // 渲染该年份的所有课程
+        html += yearData.courses.map(course => {
+          const colors = statusColors[course.status] || statusColors.active;
+          const progress = course.progress || 0;
+
+          return `
+            <div class="bg-gray-50 rounded-xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all duration-300 overflow-hidden group">
+              <!-- 卡片头部 -->
+              <div class="bg-gradient-to-r ${colors.gradient} p-4">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1 min-w-0">
+                    <h4 class="text-white font-bold text-lg truncate">${course.name}</h4>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
+                        <i class="fa ${colors.icon} mr-1"></i>${statusLabels[course.status]}
+                      </span>
+                      <span class="text-white/80 text-xs">${course.totalLessons}课时</span>
+                    </div>
+                  </div>
+                  <button onclick="deleteCourse('${course.id}')" class="text-white/70 hover:text-red-200 p-1.5 hover:bg-white/10 rounded-lg transition-colors" title="删除">
                     <i class="fa fa-trash"></i>
                   </button>
                 </div>
               </div>
 
-              <div class="space-y-2">
-                <div class="flex justify-between text-sm text-gray-600">
-                  <span>课时进度</span>
-                  <span>${course.completedLessons || 0}/${course.totalLessons} 小时</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                  <div class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: ${course.progress || 0}%"></div>
-                </div>
-                <div class="flex justify-between text-sm text-gray-600">
-                  <span>完成度</span>
-                  <span>${course.progress || 0}%</span>
+              <!-- 卡片内容 -->
+              <div class="p-4">
+                <!-- 进度条 -->
+                <div class="mb-2">
+                  <div class="flex justify-between text-sm mb-1">
+                    <span class="text-gray-500">学习进度</span>
+                    <span class="font-medium text-gray-700">${progress}%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-gradient-to-r ${colors.gradient} h-2 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">${course.completedLessons || 0} / ${course.totalLessons} 课时</p>
                 </div>
               </div>
             </div>
+          `;
+        }).join('');
+
+        html += `
+            </div>
           </div>
         `;
-      }).join('');
+      });
+
+      container.innerHTML = html;
+    }
+
+    // 更新课程年份筛选器
+    function updateCourseYearFilter() {
+      const yearSelect = document.getElementById('courseFilterYear');
+      if (!yearSelect) return;
+
+      // 获取所有课程的年份
+      const years = new Set();
+      studyData.courses.forEach(course => {
+        if (course.createdAt) {
+          const year = new Date(course.createdAt).getFullYear();
+          years.add(year);
+        }
+      });
+
+      // 当前选中的值
+      const currentValue = yearSelect.value;
+
+      // 清空并重建选项
+      yearSelect.innerHTML = '<option value="all">全部年份</option>';
+      Array.from(years).sort((a, b) => b - a).forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year + '年';
+        yearSelect.appendChild(option);
+      });
+
+      // 恢复之前选中的值
+      if (currentValue && years.has(parseInt(currentValue))) {
+        yearSelect.value = currentValue;
+      }
     }
 
     // 学习记录相关函数
@@ -10045,6 +10476,33 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     // 设置事件监听器
     function setupHouseworkEventListeners() {
+      // 初始化年份筛选选项
+      const yearFilter = document.getElementById('completedHouseworkFilterYear');
+      if (yearFilter) {
+        // 获取所有已完成家务的年份
+        const years = new Set();
+        houseworkData.tasks.forEach(task => {
+          if (task.status === 'completed' && task.completedAt) {
+            const year = new Date(task.completedAt).getFullYear();
+            years.add(year);
+          }
+        });
+        
+        // 添加当前年份（如果没有的话）
+        const currentYear = new Date().getFullYear();
+        years.add(currentYear);
+        
+        // 清空现有选项
+        yearFilter.innerHTML = '<option value="all">全部年份</option>';
+        
+        // 添加年份选项
+        Array.from(years).sort((a, b) => b - a).forEach(year => {
+          const option = document.createElement('option');
+          option.value = year;
+          option.textContent = year;
+          yearFilter.appendChild(option);
+        });
+      }
       // 标签页切换
       document.querySelectorAll('#houseworkTabNav button').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -10079,6 +10537,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       document.getElementById('completedHouseworkFilterPriority')?.addEventListener('change', () => renderCompletedHousework());
       document.getElementById('completedHouseworkFilterType')?.addEventListener('change', () => renderCompletedHousework());
       document.getElementById('completedHouseworkFilterOverdue')?.addEventListener('change', () => renderCompletedHousework());
+      document.getElementById('completedHouseworkFilterYear')?.addEventListener('change', () => renderCompletedHousework());
 
       // 逾期家务筛选
       document.getElementById('overdueHouseworkSearchInput')?.addEventListener('input', () => renderOverdueHousework());
@@ -10513,6 +10972,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const searchQuery = document.getElementById('completedHouseworkSearchInput')?.value.toLowerCase() || '';
       const priorityFilter = document.getElementById('completedHouseworkFilterPriority')?.value || 'all';
       const typeFilter = document.getElementById('completedHouseworkFilterType')?.value || 'all';
+      const yearFilter = document.getElementById('completedHouseworkFilterYear')?.value || 'all';
 
       // 筛选已完成的家务
       let filteredTasks = houseworkData.tasks.filter(task => {
@@ -10523,8 +10983,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
         const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
         const matchesType = typeFilter === 'all' || task.type === typeFilter;
+        
+        // 年份筛选
+        let matchesYear = true;
+        if (yearFilter !== 'all' && task.completedAt) {
+          const taskYear = new Date(task.completedAt).getFullYear().toString();
+          matchesYear = taskYear === yearFilter;
+        }
 
-        return matchesSearch && matchesPriority && matchesType;
+        return matchesSearch && matchesPriority && matchesType && matchesYear;
       });
 
       // 按完成时间倒序排序
