@@ -177,82 +177,6 @@
       font-family: "SimSun", "Songti SC", "STSong", "宋体", serif;
     }
 
-    /* 响应式优化 - 触摸区域最小44x44px */
-    button,
-    input[type="button"],
-    input[type="submit"],
-    input[type="reset"],
-    a[href] {
-      min-height: 44px;
-      min-width: 44px;
-    }
-
-    /* 表单元素触摸优化 */
-    input,
-    select,
-    textarea {
-      min-height: 44px;
-      padding: 0.75rem 1rem;
-    }
-
-    /* 移动端特定样式 */
-    @media (max-width: 767px) {
-      /* 减小标题字体大小 */
-      h1 {
-        font-size: 1.5rem !important;
-      }
-      
-      h2 {
-        font-size: 1.25rem !important;
-      }
-      
-      h3 {
-        font-size: 1.1rem !important;
-      }
-      
-      /* 调整padding和margin */
-      .p-8 {
-        padding: 1.5rem !important;
-      }
-      
-      .p-6 {
-        padding: 1.25rem !important;
-      }
-      
-      .py-12 {
-        padding-top: 2rem !important;
-        padding-bottom: 2rem !important;
-      }
-      
-      /* 减小图标大小 */
-      .text-7xl {
-        font-size: 4rem !important;
-      }
-      
-      .text-8xl {
-        font-size: 4.5rem !important;
-      }
-    }
-
-    /* 平板端特定样式 */
-    @media (min-width: 768px) and (max-width: 1024px) {
-      /* 适度调整 */
-      .p-8 {
-        padding: 2rem !important;
-      }
-    }
-
-    /* 图片和视频响应式 */
-    img,
-    video {
-      max-width: 100%;
-      height: auto;
-    }
-
-    /* 防止内容溢出 */
-    .overflow-auto {
-      -webkit-overflow-scrolling: touch;
-    }
 
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -278,39 +202,18 @@
             </div>
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">家庭信息管理系统</h1>
           </div>
-          <!-- 桌面端菜单 -->
-          <div class="hidden md:flex items-center space-x-4">
-            <button id="importDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
+          <div class="flex items-center space-x-4">
+            <button id="importDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
               <i class="fa fa-upload mr-2"></i> 导入数据
             </button>
-            <button id="exportDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
+            <button id="exportDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
               <i class="fa fa-download mr-2"></i> 导出数据
             </button>
             <input type="file" id="importDataInput" accept=".json" class="hidden">
-            <button id="homeBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
+            <button id="homeBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
               <i class="fa fa-home mr-2"></i> 首页
             </button>
           </div>
-          <!-- 移动端汉堡菜单按钮 -->
-          <div class="md:hidden flex items-center">
-            <button id="mobileMenuBtn" class="p-3 rounded-lg hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center">
-              <i class="fa fa-bars text-xl text-gray-700"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-      <!-- 移动端菜单 -->
-      <div id="mobileMenu" class="md:hidden hidden bg-white border-t border-gray-200">
-        <div class="px-4 py-4 space-y-3">
-          <button id="importDataBtnMobile" class="w-full px-4 py-3 rounded-lg text-sm font-medium text-white bg-secondary shadow-lg hover:bg-secondary-dark transition-all duration-300 flex items-center justify-center min-h-[44px]">
-            <i class="fa fa-upload mr-2"></i> 导入数据
-          </button>
-          <button id="exportDataBtnMobile" class="w-full px-4 py-3 rounded-lg text-sm font-medium text-white bg-primary shadow-lg hover:bg-primary-dark transition-all duration-300 flex items-center justify-center min-h-[44px]">
-            <i class="fa fa-download mr-2"></i> 导出数据
-          </button>
-          <button id="homeBtnMobile" class="w-full px-4 py-3 rounded-lg text-sm font-medium text-white bg-gray-700 shadow-lg hover:bg-gray-800 transition-all duration-300 flex items-center justify-center min-h-[44px]">
-            <i class="fa fa-home mr-2"></i> 首页
-          </button>
         </div>
       </div>
     </nav>
@@ -583,8 +486,8 @@
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">财务管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="backToHomeFromFinance" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
-              <i class="fa fa-home mr-2"></i> <span class="hidden sm:inline">返回首页</span>
+            <button id="backToHomeFromFinance" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
+              <i class="fa fa-home mr-2"></i> 返回首页
             </button>
           </div>
         </div>
@@ -4590,31 +4493,21 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         
         const exportDataButton = document.getElementById('exportDataBtn');
-        const exportDataButtonMobile = document.getElementById('exportDataBtnMobile');
         const importDataButton = document.getElementById('importDataBtn');
-        const importDataButtonMobile = document.getElementById('importDataBtnMobile');
         const importDataInput = document.getElementById('importDataInput');
 
-        const exportHandler = async function() {
+        exportDataButton?.addEventListener('click', async function() {
           const success = await StorageHelper.exportAllData();
           if (success) {
             showNotification('导出成功', '已导出系统全部数据。');
           } else {
             showNotification('导出失败', '无法导出数据，请稍后重试。', 'error');
           }
-          mobileMenu?.classList.add('hidden');
-        };
-
-        const importHandler = function() {
-          importDataInput?.click();
-          mobileMenu?.classList.add('hidden');
-        };
-
-        exportDataButton?.addEventListener('click', exportHandler);
-        exportDataButtonMobile?.addEventListener('click', exportHandler);
+        });
         
-        importDataButton?.addEventListener('click', importHandler);
-        importDataButtonMobile?.addEventListener('click', importHandler);
+        importDataButton?.addEventListener('click', function() {
+          importDataInput?.click();
+        });
         
         importDataInput?.addEventListener('change', function(e) {
           const file = e.target.files[0];
@@ -5815,8 +5708,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">学习管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="backToHomeFromStudy" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
-              <i class="fa fa-home mr-2"></i> <span class="hidden sm:inline">返回首页</span>
+            <button id="backToHomeFromStudy" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
+              <i class="fa fa-home mr-2"></i> 返回首页
             </button>
           </div>
         </div>
@@ -6140,8 +6033,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">家务管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="backToHomeFromHousework" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
-              <i class="fa fa-home mr-2"></i> <span class="hidden sm:inline">返回首页</span>
+            <button id="backToHomeFromHousework" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
+              <i class="fa fa-home mr-2"></i> 返回首页
             </button>
           </div>
         </div>
@@ -6489,25 +6382,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
   <script>
     // 页面加载完成后执行
     document.addEventListener('DOMContentLoaded', function() {
-      // 移动端汉堡菜单
-      const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-      const mobileMenu = document.getElementById('mobileMenu');
-      
-      mobileMenuBtn?.addEventListener('click', function() {
-        mobileMenu.classList.toggle('hidden');
-      });
-      
-      // 首页按钮（桌面端和移动端）
-      const homeBtnHandler = function() {
+      // 首页按钮
+      document.getElementById('homeBtn').addEventListener('click', function() {
         document.getElementById('home-page').classList.remove('hidden');
         document.getElementById('finance-module').classList.add('hidden');
         document.getElementById('study-module').classList.add('hidden');
         document.getElementById('housework-module').classList.add('hidden');
-        mobileMenu?.classList.add('hidden');
-      };
-      
-      document.getElementById('homeBtn')?.addEventListener('click', homeBtnHandler);
-      document.getElementById('homeBtnMobile')?.addEventListener('click', homeBtnHandler);
+      });
 
       // 财务管理模块
       document.getElementById('financeBtn').addEventListener('click', function() {
