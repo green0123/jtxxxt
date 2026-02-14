@@ -177,6 +177,82 @@
       font-family: "SimSun", "Songti SC", "STSong", "宋体", serif;
     }
 
+    /* 响应式优化 - 触摸区域最小44x44px */
+    button,
+    input[type="button"],
+    input[type="submit"],
+    input[type="reset"],
+    a[href] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* 表单元素触摸优化 */
+    input,
+    select,
+    textarea {
+      min-height: 44px;
+      padding: 0.75rem 1rem;
+    }
+
+    /* 移动端特定样式 */
+    @media (max-width: 767px) {
+      /* 减小标题字体大小 */
+      h1 {
+        font-size: 1.5rem !important;
+      }
+      
+      h2 {
+        font-size: 1.25rem !important;
+      }
+      
+      h3 {
+        font-size: 1.1rem !important;
+      }
+      
+      /* 调整padding和margin */
+      .p-8 {
+        padding: 1.5rem !important;
+      }
+      
+      .p-6 {
+        padding: 1.25rem !important;
+      }
+      
+      .py-12 {
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+      }
+      
+      /* 减小图标大小 */
+      .text-7xl {
+        font-size: 4rem !important;
+      }
+      
+      .text-8xl {
+        font-size: 4.5rem !important;
+      }
+    }
+
+    /* 平板端特定样式 */
+    @media (min-width: 768px) and (max-width: 1024px) {
+      /* 适度调整 */
+      .p-8 {
+        padding: 2rem !important;
+      }
+    }
+
+    /* 图片和视频响应式 */
+    img,
+    video {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* 防止内容溢出 */
+    .overflow-auto {
+      -webkit-overflow-scrolling: touch;
+    }
 
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -202,18 +278,39 @@
             </div>
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">家庭信息管理系统</h1>
           </div>
-          <div class="flex items-center space-x-4">
-            <button id="importDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
+          <!-- 桌面端菜单 -->
+          <div class="hidden md:flex items-center space-x-4">
+            <button id="importDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
               <i class="fa fa-upload mr-2"></i> 导入数据
             </button>
-            <button id="exportDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
+            <button id="exportDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
               <i class="fa fa-download mr-2"></i> 导出数据
             </button>
             <input type="file" id="importDataInput" accept=".json" class="hidden">
-            <button id="homeBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
+            <button id="homeBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
               <i class="fa fa-home mr-2"></i> 首页
             </button>
           </div>
+          <!-- 移动端汉堡菜单按钮 -->
+          <div class="md:hidden flex items-center">
+            <button id="mobileMenuBtn" class="p-3 rounded-lg hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center">
+              <i class="fa fa-bars text-xl text-gray-700"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- 移动端菜单 -->
+      <div id="mobileMenu" class="md:hidden hidden bg-white border-t border-gray-200">
+        <div class="px-4 py-4 space-y-3">
+          <button id="importDataBtnMobile" class="w-full px-4 py-3 rounded-lg text-sm font-medium text-white bg-secondary shadow-lg hover:bg-secondary-dark transition-all duration-300 flex items-center justify-center min-h-[44px]">
+            <i class="fa fa-upload mr-2"></i> 导入数据
+          </button>
+          <button id="exportDataBtnMobile" class="w-full px-4 py-3 rounded-lg text-sm font-medium text-white bg-primary shadow-lg hover:bg-primary-dark transition-all duration-300 flex items-center justify-center min-h-[44px]">
+            <i class="fa fa-download mr-2"></i> 导出数据
+          </button>
+          <button id="homeBtnMobile" class="w-full px-4 py-3 rounded-lg text-sm font-medium text-white bg-gray-700 shadow-lg hover:bg-gray-800 transition-all duration-300 flex items-center justify-center min-h-[44px]">
+            <i class="fa fa-home mr-2"></i> 首页
+          </button>
         </div>
       </div>
     </nav>
@@ -486,8 +583,8 @@
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">财务管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="backToHomeFromFinance" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-home mr-2"></i> 返回首页
+            <button id="backToHomeFromFinance" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
+              <i class="fa fa-home mr-2"></i> <span class="hidden sm:inline">返回首页</span>
             </button>
           </div>
         </div>
@@ -4493,21 +4590,31 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         
         const exportDataButton = document.getElementById('exportDataBtn');
+        const exportDataButtonMobile = document.getElementById('exportDataBtnMobile');
         const importDataButton = document.getElementById('importDataBtn');
+        const importDataButtonMobile = document.getElementById('importDataBtnMobile');
         const importDataInput = document.getElementById('importDataInput');
 
-        exportDataButton?.addEventListener('click', async function() {
+        const exportHandler = async function() {
           const success = await StorageHelper.exportAllData();
           if (success) {
             showNotification('导出成功', '已导出系统全部数据。');
           } else {
             showNotification('导出失败', '无法导出数据，请稍后重试。', 'error');
           }
-        });
-        
-        importDataButton?.addEventListener('click', function() {
+          mobileMenu?.classList.add('hidden');
+        };
+
+        const importHandler = function() {
           importDataInput?.click();
-        });
+          mobileMenu?.classList.add('hidden');
+        };
+
+        exportDataButton?.addEventListener('click', exportHandler);
+        exportDataButtonMobile?.addEventListener('click', exportHandler);
+        
+        importDataButton?.addEventListener('click', importHandler);
+        importDataButtonMobile?.addEventListener('click', importHandler);
         
         importDataInput?.addEventListener('change', function(e) {
           const file = e.target.files[0];
@@ -5708,8 +5815,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">学习管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="backToHomeFromStudy" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-home mr-2"></i> 返回首页
+            <button id="backToHomeFromStudy" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
+              <i class="fa fa-home mr-2"></i> <span class="hidden sm:inline">返回首页</span>
             </button>
           </div>
         </div>
@@ -6033,8 +6140,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <h1 class="text-lg font-bold text-gray-800 tracking-tight">家务管理系统</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <button id="backToHomeFromHousework" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-home mr-2"></i> 返回首页
+            <button id="backToHomeFromHousework" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5 min-h-[44px] min-w-[44px]">
+              <i class="fa fa-home mr-2"></i> <span class="hidden sm:inline">返回首页</span>
             </button>
           </div>
         </div>
@@ -6185,36 +6292,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           </button>
         </div>
 
-        <!-- 筛选和搜索栏 -->
-        <div class="bg-white rounded-xl shadow-lg p-4 mb-6">
-          <div class="flex flex-col md:flex-row gap-4">
-            <div class="flex-1">
-              <input type="text" id="pendingHouseworkSearchInput" placeholder="搜索家务..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-            </div>
-            <div class="flex gap-2">
-              <select id="pendingHouseworkFilterPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-                <option value="all">全部优先级</option>
-                <option value="high">高优先级</option>
-                <option value="medium">中优先级</option>
-                <option value="low">低优先级</option>
-              </select>
-              <select id="pendingHouseworkFilterOverdue" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-                <option value="all">全部状态</option>
-                <option value="overdue">已逾期</option>
-                <option value="normal">未逾期</option>
-              </select>
-              <select id="pendingHouseworkFilterType" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-                <option value="all">全部类型</option>
-                <option value="cleaning">清洁</option>
-                <option value="cooking">烹饪</option>
-                <option value="laundry">洗衣</option>
-                <option value="shopping">购物</option>
-                <option value="other">其他</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
         <!-- 待办家务列表 -->
         <div id="pendingHouseworkContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div class="text-center py-12 text-gray-500">
@@ -6229,36 +6306,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       <div id="housework-inprogress-tab-content" class="tab-content hidden animate-fade-in">
         <div class="mb-6 flex justify-between items-center">
           <h3 class="text-xl font-semibold text-gray-800">进行中家务</h3>
-        </div>
-
-        <!-- 筛选和搜索栏 -->
-        <div class="bg-white rounded-xl shadow-lg p-4 mb-6">
-          <div class="flex flex-col md:flex-row gap-4">
-            <div class="flex-1">
-              <input type="text" id="inprogressHouseworkSearchInput" placeholder="搜索家务..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-            </div>
-            <div class="flex gap-2">
-              <select id="inprogressHouseworkFilterPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-                <option value="all">全部优先级</option>
-                <option value="high">高优先级</option>
-                <option value="medium">中优先级</option>
-                <option value="low">低优先级</option>
-              </select>
-              <select id="inprogressHouseworkFilterOverdue" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-                <option value="all">全部状态</option>
-                <option value="overdue">已逾期</option>
-                <option value="normal">未逾期</option>
-              </select>
-              <select id="inprogressHouseworkFilterType" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-                <option value="all">全部类型</option>
-                <option value="cleaning">清洁</option>
-                <option value="cooking">烹饪</option>
-                <option value="laundry">洗衣</option>
-                <option value="shopping">购物</option>
-                <option value="other">其他</option>
-              </select>
-            </div>
-          </div>
         </div>
 
         <!-- 进行中家务列表 -->
@@ -6442,13 +6489,25 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
   <script>
     // 页面加载完成后执行
     document.addEventListener('DOMContentLoaded', function() {
-      // 首页按钮
-      document.getElementById('homeBtn').addEventListener('click', function() {
+      // 移动端汉堡菜单
+      const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+      const mobileMenu = document.getElementById('mobileMenu');
+      
+      mobileMenuBtn?.addEventListener('click', function() {
+        mobileMenu.classList.toggle('hidden');
+      });
+      
+      // 首页按钮（桌面端和移动端）
+      const homeBtnHandler = function() {
         document.getElementById('home-page').classList.remove('hidden');
         document.getElementById('finance-module').classList.add('hidden');
         document.getElementById('study-module').classList.add('hidden');
         document.getElementById('housework-module').classList.add('hidden');
-      });
+        mobileMenu?.classList.add('hidden');
+      };
+      
+      document.getElementById('homeBtn')?.addEventListener('click', homeBtnHandler);
+      document.getElementById('homeBtnMobile')?.addEventListener('click', homeBtnHandler);
 
       // 财务管理模块
       document.getElementById('financeBtn').addEventListener('click', function() {
@@ -10814,7 +10873,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const container = document.getElementById('pendingHouseworkContainer');
       if (!container) return;
 
-      const filteredTasks = filterHouseworkExcludeOverdue('pending', 'pendingHouseworkSearchInput', 'pendingHouseworkFilterPriority', 'pendingHouseworkFilterType');
+      const filteredTasks = filterHouseworkExcludeOverdue('pending');
       renderHouseworkList(container, filteredTasks, 'pending');
     }
 
@@ -10823,16 +10882,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const container = document.getElementById('inprogressHouseworkContainer');
       if (!container) return;
 
-      const filteredTasks = filterHouseworkExcludeOverdue('in-progress', 'inprogressHouseworkSearchInput', 'inprogressHouseworkFilterPriority', 'inprogressHouseworkFilterType');
+      const filteredTasks = filterHouseworkExcludeOverdue('in-progress');
       renderHouseworkList(container, filteredTasks, 'in-progress');
     }
 
     // 筛选家务（排除逾期家务，用于待办和进行中模块）
-    function filterHouseworkExcludeOverdue(status, searchInputId, priorityFilterId, typeFilterId) {
-      const searchQuery = document.getElementById(searchInputId)?.value.toLowerCase() || '';
-      const priorityFilter = document.getElementById(priorityFilterId)?.value || 'all';
-      const typeFilter = document.getElementById(typeFilterId)?.value || 'all';
-
+    function filterHouseworkExcludeOverdue(status) {
       return houseworkData.tasks.filter(task => {
         // 状态匹配
         if (task.status !== status) return false;
@@ -10840,17 +10895,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 排除逾期家务（逾期家务只在逾期家务模块显示）
         if (isHouseworkOverdue(task)) return false;
 
-        // 搜索匹配
-        const matchesSearch = task.title.toLowerCase().includes(searchQuery) ||
-                           (task.description && task.description.toLowerCase().includes(searchQuery));
-
-        // 优先级匹配
-        const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
-
-        // 类型匹配
-        const matchesType = typeFilter === 'all' || task.type === typeFilter;
-
-        return matchesSearch && matchesPriority && matchesType;
+        return true;
       }).sort((a, b) => {
         // 按优先级排序：高 > 中 > 低
         const priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -11293,16 +11338,24 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           'in-progress': '暂无进行中的家务',
           'completed': '暂无已完成的家务'
         };
+        const emptyIcons = {
+          'pending': 'fa-list-ul',
+          'in-progress': 'fa-spinner',
+          'completed': 'fa-check-circle'
+        };
         
+        container.className = 'min-h-[60vh] flex items-center justify-center';
         container.innerHTML = `
           <div class="text-center py-12 text-gray-500">
-            <i class="fa fa-home text-5xl mb-4 text-gray-300"></i>
+            <i class="fa ${emptyIcons[status]} text-5xl mb-4 text-gray-300"></i>
             <p class="text-lg">${emptyMessages[status]}</p>
+            ${status === 'pending' ? '<p class="text-sm mt-2">点击"添加家务"开始创建您的第一个家务任务</p>' : ''}
           </div>
         `;
         return;
       }
 
+      container.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
       container.innerHTML = tasks.map(task => createHouseworkElement(task)).join('');
 
       // 添加事件监听器（移除了编辑按钮的事件监听器）
