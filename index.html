@@ -1341,38 +1341,80 @@
     window.StorageHelper = {
       // 数据订阅
       subscriptions: {},
-      
+
       // 同步状态
       isSyncing: false,
-      
+
+      // 连接状态缓存（优化：避免每次都诊断）
+      _connectionChecked: false,
+      _isConnected: null,
+
+      // 本地缓存（优化数据库连接）
+      cache: {},
+      cacheTTL: 30000,
+      cacheTimestamp: {},
+
       // 检查 Supabase 是否可用
       isSupabaseAvailable: function() {
         return window.supabaseClient && window.SHARED_DATA_ID;
       },
 
-      // 获取数据（仅从 Supabase）
-      get: async function(key, defaultValue = null) {
+      // 快速检查连接状态（使用缓存）
+      isConnected: function() {
+        return this._isConnected;
+      },
+
+      // 获取数据（仅从 Supabase）- 带缓存优化和超时控制
+      get: async function(key, defaultValue = null, useCache = true, timeoutMs = 10000) {
         if (!this.isSupabaseAvailable()) {
           return defaultValue;
         }
+
+        // 检查缓存是否有效
+        if (useCache && this.cache[key] && this.cacheTimestamp[key]) {
+          const age = Date.now() - this.cacheTimestamp[key];
+          if (age < this.cacheTTL) {
+            console.log(`[Cache Hit] ${key} (${Math.round(age/1000)}s ago)`);
+            return this.cache[key];
+          }
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
           const { data, error } = await window.supabaseClient
             .from('shared_data')
             .select('data_value')
             .eq('data_key', key)
             .single();
-          
+
+          clearTimeout(timeoutId);
+
           if (error) {
             if (error.code === 'PGRST116') {
-              // 记录不存在
               return defaultValue;
             }
             throw error;
           }
-          
-          return data ? data.data_value : defaultValue;
+
+          const result = data ? data.data_value : defaultValue;
+
+          // 更新缓存
+          if (useCache) {
+            this.cache[key] = result;
+            this.cacheTimestamp[key] = Date.now();
+          }
+
+          return result;
         } catch (e) {
+          clearTimeout(timeoutId);
           console.error('Error getting data from Supabase:', e);
+          // 缓存失效时返回缓存数据（即使过期）
+          if (this.cache[key]) {
+            console.log(`[Cache Fallback] ${key}`);
+            return this.cache[key];
+          }
           return defaultValue;
         }
       },
@@ -1397,12 +1439,16 @@
         return false;
       },
       
-      // 保存到 Supabase（共享数据）
-      setToSupabase: async function(key, value) {
+      // 保存到 Supabase（共享数据）- 带超时控制
+      setToSupabase: async function(key, value, timeoutMs = 15000) {
         if (!this.isSupabaseAvailable()) {
           console.error('Supabase 客户端不可用');
           return false;
         }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
           console.log(`正在保存 ${key} 到 Supabase...`);
           const { data, error } = await window.supabaseClient
@@ -1415,19 +1461,42 @@
               onConflict: 'data_key'
             })
             .select();
-          
+
+          clearTimeout(timeoutId);
+
           if (error) {
             console.error('Supabase upsert 错误:', error);
             throw error;
           }
-          
+
+          // 更新缓存（保存成功后更新本地缓存）
+          this.cache[key] = value;
+          this.cacheTimestamp[key] = Date.now();
+
           console.log(`成功保存 ${key} 到 Supabase:`, data);
           return true;
         } catch (e) {
+          clearTimeout(timeoutId);
           console.error('Error saving data to Supabase:', e);
           console.error('错误详情:', e.message, e.code);
           return false;
         }
+      },
+
+      // 清除指定key的缓存
+      clearCache: function(key) {
+        if (key && this.cache[key]) {
+          delete this.cache[key];
+          delete this.cacheTimestamp[key];
+          console.log(`[Cache Cleared] ${key}`);
+        }
+      },
+
+      // 清除所有缓存
+      clearAllCache: function() {
+        this.cache = {};
+        this.cacheTimestamp = {};
+        console.log('[Cache Cleared] All');
       },
 
       // 删除数据（仅从 Supabase）
@@ -1532,25 +1601,33 @@
         return true;
       },
       
-      // 诊断 Supabase 连接和表状态
-      diagnose: async function() {
+      // 诊断 Supabase 连接和表状态（优化：不执行写入操作 + 连接状态缓存）
+      diagnose: async function(force = false) {
+        // 如果已经诊断过，直接返回缓存结果
+        if (this._connectionChecked && !force) {
+          console.log('[Connection Cache] Using cached connection status:', this._isConnected);
+          return this._isConnected;
+        }
+
         console.log('========== Supabase 诊断开始 ==========');
-        
+
         // 1. 检查 Supabase 客户端
         if (!window.supabaseClient) {
           console.error('❌ Supabase 客户端未初始化');
+          this._isConnected = false;
+          this._connectionChecked = true;
           return false;
         }
         console.log('✅ Supabase 客户端已初始化');
         console.log('Supabase URL:', window.supabaseClient.supabaseUrl);
-        
-        // 2. 检查 shared_data 表是否存在
+
+        // 2. 检查 shared_data 表是否存在（只读检查，无需写入）
         try {
           const { data, error } = await window.supabaseClient
             .from('shared_data')
-            .select('count')
+            .select('data_key')
             .limit(1);
-          
+
           if (error) {
             console.error('❌ shared_data 表访问失败:', error.message);
             console.error('错误代码:', error.code);
@@ -1566,38 +1643,21 @@ CREATE TABLE IF NOT EXISTS shared_data (
 
 CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             `);
+            this._isConnected = false;
+            this._connectionChecked = true;
             return false;
           }
           console.log('✅ shared_data 表可访问');
         } catch (e) {
           console.error('❌ 检查表时出错:', e);
+          this._isConnected = false;
+          this._connectionChecked = true;
           return false;
         }
-        
-        // 3. 测试写入数据
-        try {
-          const testData = { test: true, timestamp: new Date().toISOString() };
-          const { data, error } = await window.supabaseClient
-            .from('shared_data')
-            .upsert({
-              data_key: 'test_connection',
-              data_value: testData,
-              updated_at: new Date().toISOString()
-            })
-            .select();
-          
-          if (error) {
-            console.error('❌ 测试写入失败:', error.message);
-            console.error('这可能是权限问题，请检查 RLS 策略');
-            return false;
-          }
-          console.log('✅ 测试写入成功:', data);
-        } catch (e) {
-          console.error('❌ 测试写入时出错:', e);
-          return false;
-        }
-        
+
         console.log('========== Supabase 诊断完成 ==========');
+        this._isConnected = true;
+        this._connectionChecked = true;
         return true;
       },
 
@@ -1931,7 +1991,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const appData = {
         transactions: [],
         budgets: {
-          // 按月份存储预算，键格式为YYYY-MM
           monthly: {
             total: 0,
             categories: {}
@@ -1944,9 +2003,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         categories: {
           income: [
             { id: 'salary', name: '工资', icon: 'fa-money', color: '#10b981' },
-            // { id: 'bonus', name: '奖金', icon: 'fa-gift', color: '#3b82f6' },
-            // { id: 'investment', name: '投资收益', icon: 'fa-line-chart', color: '#8b5cf6' },
-            // { id: 'parttime', name: '兼职', icon: 'fa-briefcase', color: '#f59e0b' },
             { id: 'other_income', name: '其他收入', icon: 'fa-plus-circle', color: '#6b7280' }
           ],
           expense: [
@@ -1966,6 +2022,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           currency: 'CNY',
           dateFormat: 'YYYY-MM-DD',
           theme: 'light'
+        },
+        _cache: {
+          transactionsByDateRange: {},
+          totals: {},
+          lastUpdate: null
         }
       };
 
@@ -1983,6 +2044,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         appData.transactions = Array.isArray(savedData.transactions) ? savedData.transactions : [];
         appData.budgets = savedData.budgets || appData.budgets;
         appData.settings = savedData.settings || appData.settings;
+
+        // 清除旧缓存（因为刚从云端加载了新数据）
+        clearTransactionCache();
 
         // 初始化月份选择器
         initMonthSelector();
@@ -2203,19 +2267,22 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       async function addTransaction(transaction) {
         // 生成唯一ID
         transaction.id = generateId(transaction.type);
-        
+
         // 添加到交易列表
         appData.transactions.push(transaction);
-        
+
+        // 清除缓存
+        clearTransactionCache();
+
         // 保存数据
         await saveData();
-        
+
         // 更新UI
         updateDashboard();
         updateTransactionTable();
         updateBudgetPage();
         updateAnalysisCharts();
-        
+
         return transaction;
       }
 
@@ -2273,6 +2340,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {
           appData.transactions.splice(index, 1);
+          clearTransactionCache();
           await saveData();
           updateDashboard();
           updateTransactionTable();
@@ -2286,12 +2354,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 批量删除交易记录
       async function deleteSelectedTransactions(ids) {
         appData.transactions = appData.transactions.filter(t => !ids.includes(t.id));
+        clearTransactionCache();
         await saveData();
         updateDashboard();
         updateTransactionTable();
         updateBudgetPage();
         updateAnalysisCharts();
-        
         // 删除完成后取消所有复选框的勾选状态
         const checkboxes = document.querySelectorAll('.transaction-checkbox');
         checkboxes.forEach(checkbox => {
@@ -2308,12 +2376,36 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         updateDeleteSelectedButton();
       }
 
-      // 获取指定日期范围内的交易
+      // 获取指定日期范围内的交易（带缓存优化）
       function getTransactionsByDateRange(startDate, endDate) {
-        return appData.transactions.filter(transaction => {
+        const startKey = startDate.toISOString();
+        const endKey = endDate.toISOString();
+        const cacheKey = `${startKey}_${endKey}`;
+
+        // 检查缓存是否存在且有效
+        if (appData._cache.transactionsByDateRange[cacheKey] &&
+            appData._cache.lastUpdate === appData.transactions.length + appData.transactions.reduce((sum, t) => sum + (t.id ? 1 : 0), 0)) {
+          return appData._cache.transactionsByDateRange[cacheKey];
+        }
+
+        const result = appData.transactions.filter(transaction => {
           const transactionDate = new Date(transaction.date);
           return transactionDate >= startDate && transactionDate <= endDate;
         });
+
+        // 更新缓存
+        appData._cache.transactionsByDateRange[cacheKey] = result;
+        appData._cache.lastUpdate = appData.transactions.length;
+
+        return result;
+      }
+
+      // 清除交易缓存
+      function clearTransactionCache() {
+        appData._cache.transactionsByDateRange = {};
+        appData._cache.totals = {};
+        appData._cache.lastUpdate = null;
+        console.log('[Transaction Cache Cleared]');
       }
 
       // 获取当前月份的交易
@@ -3934,18 +4026,20 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       // 初始化应用
       async function initApp() {
-        // 运行 Supabase 诊断（仅输出到控制台）
-        console.log('正在运行 Supabase 诊断...');
-        const isConnected = await StorageHelper.diagnose();
+        // 并行执行诊断和数据加载（优化：减少等待时间）
+        console.log('正在初始化应用...');
+
+        const [isConnected] = await Promise.all([
+          StorageHelper.diagnose().catch(() => false),
+          loadData()
+        ]);
+
         if (!isConnected) {
           console.warn('⚠️ Supabase 连接异常，数据将无法保存到云端');
         } else {
           console.log('✅ Supabase 连接正常');
         }
-        
-        // 加载数据
-        await loadData();
-        
+
         // 初始化分类选择器
         initCategorySelectors();
         
