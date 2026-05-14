@@ -259,15 +259,15 @@
               <i class="fa fa-money text-blue-600 text-2xl sm:text-3xl"></i>
             </div>
             <div>
-              <p class="text-xs font-medium text-gray-500 mb-1">本月收支</p>
+              <p class="text-xs font-medium text-gray-500 mb-1">财务状况</p>
               <div class="flex space-x-3 sm:space-x-4">
                 <div>
-                  <p class="text-xs text-green-600">收入</p>
-                  <p class="text-lg sm:text-xl font-bold text-green-600" id="homeMonthlyIncome">¥0.00</p>
+                  <p class="text-xs text-red-600">支出</p>
+                  <p class="text-lg sm:text-xl font-bold text-red-600" id="homeYearlyExpense">¥0.00</p>
                 </div>
                 <div>
-                  <p class="text-xs text-red-600">支出</p>
-                  <p class="text-lg sm:text-xl font-bold text-red-600" id="homeMonthlyExpense">¥0.00</p>
+                  <p class="text-xs text-blue-600">结余</p>
+                  <p class="text-lg sm:text-xl font-bold text-blue-600" id="homeYearlyBalance">¥0.00</p>
                 </div>
               </div>
             </div>
@@ -2382,9 +2382,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const endKey = endDate.toISOString();
         const cacheKey = `${startKey}_${endKey}`;
 
+        // 计算数据版本号（用于检测数据变化）
+        const dataVersion = appData.transactions.length;
+
         // 检查缓存是否存在且有效
         if (appData._cache.transactionsByDateRange[cacheKey] &&
-            appData._cache.lastUpdate === appData.transactions.length + appData.transactions.reduce((sum, t) => sum + (t.id ? 1 : 0), 0)) {
+            appData._cache.lastUpdate === dataVersion) {
           return appData._cache.transactionsByDateRange[cacheKey];
         }
 
@@ -2395,7 +2398,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
         // 更新缓存
         appData._cache.transactionsByDateRange[cacheKey] = result;
-        appData._cache.lastUpdate = appData.transactions.length;
+        appData._cache.lastUpdate = dataVersion;
 
         return result;
       }
@@ -2482,12 +2485,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const lastMonthTransactions = getLastMonthTransactions();
         const todayTransactions = getTodayTransactions();
         const yesterdayTransactions = getYesterdayTransactions();
-        
+        const currentYearTransactions = getCurrentYearTransactions();
+
         // 计算本月收支
         const monthlyIncome = calculateTotalIncome(currentMonthTransactions);
         const monthlyExpense = calculateTotalExpense(currentMonthTransactions);
         const monthlyBalance = monthlyIncome - monthlyExpense;
-        
+
+        // 计算本年收支
+        const yearlyIncome = calculateTotalIncome(currentYearTransactions);
+        const yearlyExpense = calculateTotalExpense(currentYearTransactions);
+        const yearlyBalance = yearlyIncome - yearlyExpense;
+
         // 计算上月收支
         const lastMonthIncome = calculateTotalIncome(lastMonthTransactions);
         const lastMonthExpense = calculateTotalExpense(lastMonthTransactions);
@@ -2513,11 +2522,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 更新UI - 数据看板
         document.getElementById('monthlyIncome').textContent = `¥${monthlyIncome.toFixed(2)}`;
         document.getElementById('monthlyExpense').textContent = `¥${monthlyExpense.toFixed(2)}`;
-        
-        // 更新UI - 首页
-        document.getElementById('homeMonthlyIncome').textContent = `¥${monthlyIncome.toFixed(2)}`;
-        document.getElementById('homeMonthlyExpense').textContent = `¥${monthlyExpense.toFixed(2)}`;
-        
+
+        // 更新UI - 首页（财务状况）
+        document.getElementById('homeYearlyExpense').textContent = `¥${yearlyExpense.toFixed(2)}`;
+        document.getElementById('homeYearlyBalance').textContent = `¥${yearlyBalance.toFixed(2)}`;
+
         // 更新今日收支UI
         document.getElementById('todayIncome').textContent = `¥${todayIncome.toFixed(2)}`;
         document.getElementById('todayExpense').textContent = `¥${todayExpense.toFixed(2)}`;
