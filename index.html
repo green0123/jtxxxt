@@ -279,8 +279,8 @@
               <i class="fa fa-book text-purple-600 text-2xl sm:text-3xl"></i>
             </div>
             <div>
-              <p class="text-xs font-medium text-gray-500 mb-1">进行中课程</p>
-              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homeActiveCourses">0门</p>
+              <p class="text-xs font-medium text-gray-500 mb-1">年度学习时长</p>
+              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homeYearlyStudyHours">0小时</p>
             </div>
           </div>
         </div>
@@ -2590,9 +2590,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 更新最近交易记录
         updateRecentTransactions();
 
-        // 更新首页的进行中课程数量
-        const activeCourses = studyData.courses.filter(c => c.status === 'active');
-        document.getElementById('homeActiveCourses').textContent = `${activeCourses.length}门`;
+        // 更新首页的年度学习时长
+        const currentYear = new Date().getFullYear();
+        const yearlyStudyRecords = studyData.records.filter(r => {
+          if (!r.date) return false;
+          return parseInt(r.date.substring(0, 4)) === currentYear;
+        });
+        const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+        const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
+        document.getElementById('homeYearlyStudyHours').textContent = `${yearlyStudyHours}小时`;
 
         // 更新首页的待办家务数量（排除逾期）
       const today = new Date();
@@ -6882,11 +6888,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       renderStudyRecords();
       initStudyCharts();
 
-      // 更新首页的进行中课程数量
-      const activeCourses = studyData.courses.filter(c => c.status === 'active');
-      const homeActiveCourses = document.getElementById('homeActiveCourses');
-      if (homeActiveCourses) {
-        homeActiveCourses.textContent = `${activeCourses.length}门`;
+      // 更新首页的年度学习时长
+      const currentYear = new Date().getFullYear();
+      const yearlyStudyRecords = studyData.records.filter(r => {
+        if (!r.date) return false;
+        return parseInt(r.date.substring(0, 4)) === currentYear;
+      });
+      const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+      const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
+      const homeYearlyStudyHours = document.getElementById('homeYearlyStudyHours');
+      if (homeYearlyStudyHours) {
+        homeYearlyStudyHours.textContent = `${yearlyStudyHours}小时`;
       }
 
       // 更新首页的待办家务数量（排除逾期）
@@ -8536,10 +8548,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 进行中课程
       const activeCourses = studyData.courses.filter(c => c.status === 'active');
       document.getElementById('activeCoursesCount').textContent = `${activeCourses.length}门`;
-      // 同时更新首页的进行中课程数量
-      const homeActiveCourses = document.getElementById('homeActiveCourses');
-      if (homeActiveCourses) {
-        homeActiveCourses.textContent = `${activeCourses.length}门`;
+      // 同时更新首页的年度学习时长
+      const currentYear = new Date().getFullYear();
+      const yearlyStudyRecords = studyData.records.filter(r => {
+        if (!r.date) return false;
+        return parseInt(r.date.substring(0, 4)) === currentYear;
+      });
+      const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+      const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
+      const homeYearlyStudyHours = document.getElementById('homeYearlyStudyHours');
+      if (homeYearlyStudyHours) {
+        homeYearlyStudyHours.textContent = `${yearlyStudyHours}小时`;
       }
 
       // 同时更新首页的待办家务数量（排除逾期）
@@ -9959,7 +9978,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     function updateStudyCharts() {
       updateStudyTimeChart(7);
-      
+
       if (todayStudyChart) {
         const today = new Date().toISOString().split('T')[0];
         const courseColors = [
@@ -9972,11 +9991,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           { bg: 'rgba(14, 165, 233, 0.9)', border: '#0ea5e9', gradient: ['#38bdf8', '#0ea5e9'] },
           { bg: 'rgba(249, 115, 22, 0.9)', border: '#f97316', gradient: ['#fb923c', '#f97316'] }
         ];
-        
+
         // 获取今日有学习记录的课程
         const todayRecords = studyData.records.filter(r => r.date === today);
         const courseIdsWithRecords = [...new Set(todayRecords.map(r => r.courseId))];
-        
+
         // 计算今日每门课程的学习时长（分钟）
         const todayCourseDurations = courseIdsWithRecords.map(courseId => {
           const course = studyData.courses.find(c => c.id === courseId);
@@ -9984,11 +10003,23 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           const duration = courseRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
           return { course, duration, courseId };
         }).filter(item => item.course);
-        
+
+        // 重新创建渐变色
+        const todayStudyCtx = document.getElementById('todayStudyChart')?.getContext('2d');
+        const gradients = courseColors.slice(0, todayCourseDurations.length).map((color) => {
+          if (!todayStudyCtx) return color.bg;
+          const gradient = todayStudyCtx.createLinearGradient(0, 0, 0, 200);
+          gradient.addColorStop(0, color.gradient[0]);
+          gradient.addColorStop(1, color.gradient[1]);
+          return gradient;
+        });
+
         todayStudyChart.data.labels = todayCourseDurations.map(item => item.course.name.length > 6 ? item.course.name.substring(0, 6) + '...' : item.course.name);
         todayStudyChart.data.datasets[0].data = todayCourseDurations.map(item => item.duration);
+        todayStudyChart.data.datasets[0].backgroundColor = gradients;
+        todayStudyChart.data.datasets[0].borderColor = courseColors.slice(0, todayCourseDurations.length).map(c => c.border);
         todayStudyChart.update('active');
-        
+
         // 更新详情列表
         updateTodayStudyDetails(todayCourseDurations, courseColors);
       }
