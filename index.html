@@ -5891,8 +5891,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <i class="fa fa-clock-o text-blue-600 text-lg sm:text-xl"></i>
               </div>
               <div>
-                <p class="text-xs sm:text-sm text-gray-500">本周学习时间</p>
-                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="weeklyStudyTime">0小时</p>
+                <p class="text-xs sm:text-sm text-gray-500">年度学习时长</p>
+                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="yearlyStudyTime">0小时</p>
               </div>
             </div>
           </div>
@@ -7041,8 +7041,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
       document.getElementById('importStudyDataInput')?.addEventListener('change', importStudyData);
 
-      // 初始化日期选择器
-      document.getElementById('recordDate').valueAsDate = new Date();
+      // 初始化日期选择器为今天
+      const today = new Date();
+      document.getElementById('recordDate').value = today.toISOString().split('T')[0];
 
       // 初始化开始时间为当前时间，结束时间为当前时间+1小时
       const now = new Date();
@@ -8576,18 +8577,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const completedCourses = studyData.courses.filter(c => c.status === 'completed');
       document.getElementById('completedCoursesCount').textContent = `${completedCourses.length}门`;
 
-      // 本周学习时间 - 统一使用本周计算逻辑
-      const now = new Date();
-      const weekStart = getWeekStart(now);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-
-      const weeklyRecords = studyData.records.filter(r => {
-        const recordDate = new Date(r.date);
-        return recordDate >= weekStart && recordDate < weekEnd;
-      });
-      const weeklyMinutes = weeklyRecords.reduce((sum, r) => sum + r.duration, 0);
-      document.getElementById('weeklyStudyTime').textContent = `${(weeklyMinutes / 60).toFixed(1)}小时`;
+      // 年度学习时长
+      document.getElementById('yearlyStudyTime').textContent = `${yearlyStudyHours}小时`;
 
       // 连续学习天数
       const streak = calculateStudyStreak();
@@ -9129,7 +9120,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       // 重置表单
       document.getElementById('addStudyRecordForm').reset();
-      document.getElementById('recordDate').valueAsDate = new Date();
+      // 重新设置日期为今天
+      const today = new Date();
+      document.getElementById('recordDate').value = today.toISOString().split('T')[0];
 
       // 重新设置默认时间（开始时间为当前时间，结束时间为当前时间+1小时）
       const now = new Date();
@@ -9853,22 +9846,38 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       
       // 计算连续学习天数
       let streak = 0;
-      let hasBreak = false;
       const streakDots = document.getElementById('streakDots');
       
+      // 获取所有有学习记录的日期（去重并排序）
+      const uniqueDates = [...new Set(studyData.records.map(r => r.date))].sort().reverse();
+      if (uniqueDates.length > 0) {
+        let currentDate = new Date();
+        currentDate.setHours(0, 0, 0, 0);
+        
+        for (let i = 0; i < uniqueDates.length; i++) {
+          const recordDate = new Date(uniqueDates[i]);
+          recordDate.setHours(0, 0, 0, 0);
+          const diffDays = Math.floor((currentDate - recordDate) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays === i) {
+            streak++;
+          } else if (i === 0 && diffDays === 1) {
+            // 今天还没学习，但昨天学了
+            currentDate = recordDate;
+            streak++;
+          } else {
+            break;
+          }
+        }
+      }
+      
+      // 更新打卡圆点
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
         const dateStr = date.toISOString().split('T')[0];
         const dayRecords = studyData.records.filter(r => r.date === dateStr);
         const hasStudy = dayRecords.length > 0 && dayRecords.reduce((sum, r) => sum + r.duration, 0) > 0;
         
-        if (hasStudy && !hasBreak) {
-          streak++;
-        } else if (!hasStudy) {
-          hasBreak = true;
-        }
-        
-        // 更新打卡圆点
         if (streakDots && streakDots.children[days - 1 - i]) {
           const dot = streakDots.children[days - 1 - i];
           if (hasStudy) {
