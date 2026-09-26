@@ -193,25 +193,28 @@
   <!-- 系统首页 -->
   <div id="home-page" class="min-h-screen flex flex-col">
     <!-- 顶部导航栏 -->
-    <nav class="bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-40">
+    <nav class="app-header bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-40">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-          <div class="flex items-center space-x-3">
-            <div class="bg-primary/10 p-2 rounded-lg">
-              <i class="fa fa-dashboard text-primary text-2xl"></i>
+        <div class="flex justify-between items-center h-16 gap-2">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="bg-primary/10 p-2 rounded-lg shrink-0">
+              <i class="fa fa-dashboard text-primary text-xl sm:text-2xl"></i>
             </div>
-            <h1 class="text-lg font-bold text-gray-800 tracking-tight">家庭信息管理系统</h1>
+            <h1 class="text-base sm:text-lg font-bold text-gray-800 tracking-tight truncate">家庭信息管理系统</h1>
           </div>
-          <div class="flex items-center space-x-4">
-            <button id="importDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-upload mr-2"></i> 导入数据
+          <div class="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            <button id="importDataBtn" title="导入数据" aria-label="导入数据"
+              class="h-9 px-2.5 sm:px-4 rounded-full text-sm font-medium text-white bg-secondary shadow-lg shadow-secondary/30 hover:bg-secondary-dark transition-all duration-200 flex items-center justify-center whitespace-nowrap">
+              <i class="fa fa-upload sm:mr-2"></i><span class="hidden sm:inline">导入数据</span>
             </button>
-            <button id="exportDataBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-download mr-2"></i> 导出数据
+            <button id="exportDataBtn" title="导出数据" aria-label="导出数据"
+              class="h-9 px-2.5 sm:px-4 rounded-full text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-200 flex items-center justify-center whitespace-nowrap">
+              <i class="fa fa-download sm:mr-2"></i><span class="hidden sm:inline">导出数据</span>
             </button>
             <input type="file" id="importDataInput" accept=".json" class="hidden">
-            <button id="homeBtn" class="px-4 py-2 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-300 flex items-center hover:-translate-y-0.5">
-              <i class="fa fa-home mr-2"></i> 首页
+            <button id="homeBtn" title="返回首页" aria-label="返回首页"
+              class="h-9 px-2.5 sm:px-4 rounded-full text-sm font-medium text-white bg-gray-700 shadow-lg shadow-gray/30 hover:bg-gray-800 transition-all duration-200 flex items-center justify-center whitespace-nowrap">
+              <i class="fa fa-home sm:mr-2"></i><span class="hidden sm:inline">首页</span>
             </button>
           </div>
         </div>
@@ -634,8 +637,8 @@
       <div class="bg-white/80 backdrop-blur-md rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 border border-white/20">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-3">
           <h3 class="text-base sm:text-lg font-semibold text-gray-800">最近交易</h3>
-          <button id="viewAllRecordsBtn" class="w-full sm:w-auto px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium text-white bg-primary shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300 flex items-center justify-center hover:-translate-y-0.5">
-            查看全部 <i class="fa fa-chevron-right ml-2 text-xs"></i>
+          <button id="viewAllRecordsBtn" class="w-full sm:w-auto px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium text-primary bg-primary/10 hover:bg-primary/15 transition-all duration-200 flex items-center justify-center gap-1">
+            查看全部 <i class="fa fa-chevron-right text-[10px]"></i>
           </button>
         </div>
         <div class="overflow-x-auto">
@@ -1354,6 +1357,25 @@
       cacheTTL: 30000,
       cacheTimestamp: {},
 
+      // 【数据安全】读取可信度：true=本次拿到的是云端真实数据；false=读取失败，返回的是默认值
+      // 配合 setToSupabase 的写入拦截，确保「读失败」绝不会被当成「数据为空」写回云端
+      _readOk: {},
+
+      // 云端记录版本（用于乐观锁，防止多标签页互相覆盖）
+      _loadedAt: {},
+
+      // 【缺陷修复】是否已确认过该 key 的云端状态。
+      // 原实现用 `if (this._loadedAt[key])` 判断是否做乐观锁，
+      // 而「云端确实还没有这条记录」时 _loadedAt 为 null，整段校验被跳过，
+      // 恰好在「两个标签页首次写入」这个最需要保护的场景失效。
+      // 改用独立标志位，null 也算「已确认不存在」。
+      _hasVersion: {},
+
+      // 上层可查询某 key 最近一次读取是否成功
+      isReadOk: function(key) {
+        return this._readOk[key] === true;
+      },
+
       // 检查 Supabase 是否可用
       isSupabaseAvailable: function() {
         return window.supabaseClient && window.SHARED_DATA_ID;
@@ -1367,6 +1389,7 @@
       // 获取数据（仅从 Supabase）- 带缓存优化和超时控制
       get: async function(key, defaultValue = null, useCache = true, timeoutMs = 10000) {
         if (!this.isSupabaseAvailable()) {
+          this._readOk[key] = false;
           return defaultValue;
         }
 
@@ -1375,30 +1398,43 @@
           const age = Date.now() - this.cacheTimestamp[key];
           if (age < this.cacheTTL) {
             console.log(`[Cache Hit] ${key} (${Math.round(age/1000)}s ago)`);
+            // 缓存只可能由「读取成功」或「保存成功」写入，因此可信
+            this._readOk[key] = true;
             return this.cache[key];
           }
         }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        // 【数据安全修复】真正生效的超时。
+        // 原实现 new 了 AbortController 却从未把 signal 传给请求，那个「超时」形同虚设，
+        // 请求可以无限期挂起，拉长了「内存里还是空数据」的窗口。
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`读取 ${key} 超时（${timeoutMs}ms）`)), timeoutMs);
+        });
 
         try {
-          const { data, error } = await window.supabaseClient
+          const query = window.supabaseClient
             .from('shared_data')
-            .select('data_value')
+            .select('data_value, updated_at')
             .eq('data_key', key)
             .single();
 
-          clearTimeout(timeoutId);
+          const { data, error } = await Promise.race([query, timeoutPromise]);
 
           if (error) {
             if (error.code === 'PGRST116') {
+              // 该 key 在云端确实还没有记录，属于正常的首次使用
+              this._readOk[key] = true;
+              this._loadedAt[key] = null;
+              // 已确认「不存在」，仍需参与乐观锁校验
+              this._hasVersion[key] = true;
               return defaultValue;
             }
             throw error;
           }
 
           const result = data ? data.data_value : defaultValue;
+          this._loadedAt[key] = data ? data.updated_at : null;
+          this._hasVersion[key] = true;
 
           // 更新缓存
           if (useCache) {
@@ -1406,13 +1442,18 @@
             this.cacheTimestamp[key] = Date.now();
           }
 
+          this._readOk[key] = true;
           return result;
         } catch (e) {
-          clearTimeout(timeoutId);
           console.error('Error getting data from Supabase:', e);
+          // 【数据安全修复】读取失败：标记为不可信。
+          // 上层若基于默认值继续运行，setToSupabase 会拒绝写入，从而杜绝「空数据覆盖云端」。
+          this._readOk[key] = false;
+          this._loadedAt[key] = null;
+          this._hasVersion[key] = false;
           // 缓存失效时返回缓存数据（即使过期）
           if (this.cache[key]) {
-            console.log(`[Cache Fallback] ${key}`);
+            console.log(`[Cache Fallback] ${key}（读取失败，使用过期缓存，并已标记为不可信）`);
             return this.cache[key];
           }
           return defaultValue;
@@ -1446,12 +1487,58 @@
           return false;
         }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const notify = (title, message) => {
+          console.error(`[${key}] ${title}：${message}`);
+          try {
+            if (window.AppHelper && window.AppHelper.showNotification) {
+              window.AppHelper.showNotification(title, message, 'error');
+            }
+          } catch (e) { /* 通知失败不影响拦截逻辑 */ }
+        };
+
+        // 【数据安全修复·第一道保险】该 key 最近一次读取失败过，
+        // 说明当前内存里很可能是「默认值」而非真实数据。此时写回 = 用空数据覆盖云端，必须拒绝。
+        if (this._readOk[key] === false) {
+          notify('保存已被阻止', `未能从云端读取「${key}」，为防止覆盖你已有的数据，本次保存已取消。请检查网络后刷新页面再试，你刚才的操作需要重新做一次。`);
+          return false;
+        }
+
+        // 【数据安全修复·第二道保险】乐观锁：写入前确认云端版本仍是「我们读到的那个版本」。
+        // 防止多标签页 / 多设备之间的后写覆盖先写。
+        // 【缺陷修复】原判断是 `if (this._loadedAt[key])`，
+        // 而「云端确实还没有这条记录」时 _loadedAt 为 null，整段乐观锁被跳过，
+        // 恰好在「两个标签页首次写入」这个最需要保护的场景失效。改用独立标志位。
+        if (this._hasVersion[key]) {
+          try {
+            const { data: fresh, error: freshErr } = await window.supabaseClient
+              .from('shared_data')
+              .select('updated_at')
+              .eq('data_key', key)
+              .limit(1);
+            if (!freshErr && fresh && fresh.length > 0) {
+              if (fresh[0].updated_at !== this._loadedAt[key]) {
+                notify('保存已被阻止', `「${key}」已被其它页面更新，为避免互相覆盖，本次保存已取消。请刷新页面查看最新数据后重新操作。`);
+                return false;
+              }
+            } else if (this._loadedAt[key] !== null) {
+              // 读取时云端有记录，现在却查不到 —— 说明被别人删了，同样不能盲目覆盖
+              notify('保存已被阻止', `「${key}」在云端已被删除，本次保存已取消。请刷新页面后重新操作。`);
+              return false;
+            }
+          } catch (e) {
+            // 校验本身失败时不阻断正常保存，仅记录
+            console.warn(`[${key}] 版本校验失败，跳过乐观锁：`, e);
+          }
+        }
+
+        // 【数据安全修复】同样使用真正生效的超时
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`保存 ${key} 超时（${timeoutMs}ms）`)), timeoutMs);
+        });
 
         try {
           console.log(`正在保存 ${key} 到 Supabase...`);
-          const { data, error } = await window.supabaseClient
+          const writeQuery = window.supabaseClient
             .from('shared_data')
             .upsert({
               data_key: key,
@@ -1462,7 +1549,7 @@
             })
             .select();
 
-          clearTimeout(timeoutId);
+          const { data, error } = await Promise.race([writeQuery, timeoutPromise]);
 
           if (error) {
             console.error('Supabase upsert 错误:', error);
@@ -1472,11 +1559,16 @@
           // 更新缓存（保存成功后更新本地缓存）
           this.cache[key] = value;
           this.cacheTimestamp[key] = Date.now();
+          // 记录写入后的云端版本，避免自己紧接着再保存时误判为「被别人改过」
+          if (data && data.length > 0) {
+            this._loadedAt[key] = data[0].updated_at;
+          }
+          this._hasVersion[key] = true;
+          this._readOk[key] = true;
 
-          console.log(`成功保存 ${key} 到 Supabase:`, data);
+          console.log(`成功保存 ${key} 到 Supabase`);
           return true;
         } catch (e) {
-          clearTimeout(timeoutId);
           console.error('Error saving data to Supabase:', e);
           console.error('错误详情:', e.message, e.code);
           return false;
@@ -1694,40 +1786,64 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       },
 
       // 导入数据
-      importData: function(jsonData) {
+      // 【数据安全修复】整包导入：结构校验 + 自动备份 + 真正等待写入完成。
+      // 原实现 this.set() 没有 await，却立即 return true，
+      // 调用方据此提示「导入成功」并在 800ms 后刷新页面 —— 写入很可能尚未完成，结果丢失。
+      importData: async function(jsonData) {
+        let data;
         try {
-          const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
-          
-          // 验证数据格式
-          if (!data || !data.data) {
-            throw new Error('Invalid data format');
-          }
-          
-          // 数据版本检查
-          if (data.version) {
-            console.log(`Importing data version: ${data.version}`);
-            // 这里可以添加版本迁移逻辑
-          }
-          
-          // 数据冲突解决
-          this.resolveConflicts(data.data);
-          
-          // 保存数据
-          if (data.data.familyFinanceData) {
-            this.set('familyFinanceData', data.data.familyFinanceData);
-          }
-          if (data.data.studyData) {
-            this.set('studyData', data.data.studyData);
-          }
-          if (data.data.houseworkData) {
-            this.set('houseworkData', data.data.houseworkData);
-          }
-          
-          return true;
+          data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
         } catch (e) {
-          console.error('Error importing data:', e);
-          return false;
+          console.error('导入文件解析失败:', e);
+          return { ok: false, message: '文件不是合法的 JSON' };
         }
+
+        if (data && data.version) {
+          console.log(`Importing data version: ${data.version}`);
+        }
+
+        // 结构校验，防止空文件/错类型文件清空云端
+        const check = window.AppHelper.validateImportPackage(data);
+        if (!check.ok) {
+          return { ok: false, message: '文件结构不正确：' + check.errors.slice(0, 3).join('；') };
+        }
+
+        const payload = data.data || data;
+        const modules = ['familyFinanceData', 'studyData', 'houseworkData']
+          .filter(function(k) { return payload[k] !== undefined; });
+        if (modules.length === 0) {
+          return { ok: false, message: '文件中没有可导入的模块数据' };
+        }
+
+        // 导入前自动备份当前云端数据
+        try {
+          const current = {};
+          for (let i = 0; i < modules.length; i++) {
+            current[modules[i]] = await this.get(modules[i], null);
+          }
+          await this.set('__backup_before_import', {
+            moduleKey: modules.join(','),
+            createdAt: new Date().toISOString(),
+            data: current
+          });
+        } catch (e) {
+          console.warn('导入前备份失败，仍继续导入：', e);
+        }
+
+        // 逐个写入并逐个检查结果
+        const failed = [];
+        for (let i = 0; i < modules.length; i++) {
+          const k = modules[i];
+          // 【XSS 修复】写入前清理 id，防止 onclick 属性被注入
+          const cleaned = window.AppHelper.sanitizeIds(k, payload[k]);
+          const ok = await this.set(k, cleaned);
+          if (!ok) failed.push(k);
+        }
+
+        if (failed.length > 0) {
+          return { ok: false, message: '以下模块未能写入云端：' + failed.join('、') + '。原数据已自动备份' };
+        }
+        return { ok: true, message: '已导入 ' + modules.length + ' 个模块' };
       },
 
       // 解决数据冲突
@@ -1794,7 +1910,29 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       if (modal) modal.classList.add('hidden');
     }
 
+    // ============================================================
+    // 【XSS 修复】HTML 转义工具
+    // 本项目所有用户数据都通过模板字符串拼进 innerHTML，此前全站没有任何转义，
+    // 导致「交易备注 / 课程名 / 学习目标 / 家务标题」等字段可注入任意 HTML 与脚本。
+    // 约定：凡是用户可输入的字段，进入 HTML 模板前必须经过 esc()。
+    // 注意：只转义「数据」，不改变标签结构，因此内联 onclick 等既有机制不受影响。
+    // ============================================================
+    window.esc = function(value) {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+
+    // 供 AppHelper 调用
     window.AppHelper = {
+      // 【XSS 修复】HTML 转义（与全局 esc 等价，供本对象内部使用）
+      escapeHtml: function(value) {
+        return window.esc(value);
+      },
       // 数据加载通用函数
       loadData: async function(key, defaultData) {
         const savedData = await StorageHelper.get(key, {
@@ -1935,18 +2073,130 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         this.showNotification('成功', `${filename} 已导出`, 'success');
       },
 
+      // ============================================================
+      // 【数据安全修复】导入数据加固
+      // 原实现没有任何结构校验：选一个 {} 就能把云端数据整体清空，
+      // 且未 await 写入就提示「导入成功」并刷新页面，导致导入结果丢失。
+      // ============================================================
+
+      // id 会被直接拼进 onclick="fn('${id}')"。对内联事件处理器而言，
+      // HTML 实体转义是无效的（浏览器先解码实体、再编译 JS，&#39; 仍能闭合引号），
+      // 所以只能在数据边界强制 id 只含安全字符。
+      safeId: function(id) {
+        const s = String(id === undefined || id === null ? '' : id);
+        if (/^[A-Za-z0-9_.-]{1,128}$/.test(s)) return s;
+        return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      },
+
+      // 批量清理某个模块各数组里的 id，并保证模块内唯一
+      sanitizeIds: function(moduleName, obj) {
+        if (!obj || typeof obj !== 'object') return obj;
+        const used = new Set();
+        const self = this;
+        Object.keys(this.IMPORT_SCHEMA[moduleName] || {}).forEach(function(field) {
+          if (!Array.isArray(obj[field])) return;
+          obj[field].forEach(function(item) {
+            if (!item || typeof item !== 'object') return;
+            let id = self.safeId(item.id);
+            const base = id;
+            let n = 1;
+            while (used.has(id)) { id = base + '-' + n; n++; }
+            used.add(id);
+            item.id = id;
+          });
+        });
+        return obj;
+      },
+
+      IMPORT_SCHEMA: {
+        familyFinanceData: { transactions: 'array', budgets: 'object', settings: 'object' },
+        studyData: { plans: 'array', courses: 'array', records: 'array', monthlyPlans: 'array', weeklyPlans: 'array' },
+        houseworkData: { tasks: 'array', types: 'array' }
+      },
+
+      // 校验单个模块的数据结构
+      validateModule: function(moduleName, obj) {
+        const spec = this.IMPORT_SCHEMA[moduleName];
+        const errors = [];
+        if (!spec) return { ok: false, errors: ['未知的模块：' + moduleName] };
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+          return { ok: false, errors: [moduleName + ' 的内容必须是一个对象'] };
+        }
+        Object.keys(spec).forEach(function(field) {
+          const v = obj[field];
+          if (v === undefined || v === null) return;
+          if (spec[field] === 'array') {
+            if (!Array.isArray(v)) {
+              errors.push(moduleName + '.' + field + ' 应为数组，实际是 ' + typeof v);
+            } else if (v.length > 200000) {
+              errors.push(moduleName + '.' + field + ' 条目过多（' + v.length + '），疑似异常文件');
+            }
+          } else if (typeof v !== 'object' || Array.isArray(v)) {
+            errors.push(moduleName + '.' + field + ' 应为对象');
+          }
+        });
+        return { ok: errors.length === 0, errors: errors };
+      },
+
+      // 校验整包备份文件（财务整体导入格式：{ data: { ... } }，也兼容直接传模块对象）
+      validateImportPackage: function(pkg) {
+        const errors = [];
+        if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) {
+          return { ok: false, errors: ['文件内容不是一个对象'] };
+        }
+        const data = (pkg && pkg.data) ? pkg.data : pkg;
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+          return { ok: false, errors: ['data 字段不是一个对象'] };
+        }
+        let found = 0;
+        const self = this;
+        Object.keys(this.IMPORT_SCHEMA).forEach(function(k) {
+          if (data[k] === undefined) return;
+          found++;
+          const r = self.validateModule(k, data[k]);
+          if (!r.ok) r.errors.forEach(function(e) { errors.push(e); });
+        });
+        if (found === 0) errors.push('文件中没有找到任何可导入的模块数据');
+        return { ok: errors.length === 0, errors: errors };
+      },
+
+      // 导入前自动备份当前数据（固定 key，避免备份无限膨胀）
+      backupBeforeImport: function(moduleKey, currentData) {
+        return window.StorageHelper.set('__backup_before_import', {
+          moduleKey: moduleKey,
+          createdAt: new Date().toISOString(),
+          data: currentData
+        });
+      },
+
       // 导入数据
       importData: function(e, callback) {
         const file = e.target.files[0];
         if (!file) return;
 
+        // 【数据安全修复】限制文件大小
+        if (file.size > 8 * 1024 * 1024) {
+          this.showNotification('导入失败', '文件过大（超过 8MB），请确认选择的是本系统导出的备份文件。', 'error');
+          e.target.value = '';
+          return;
+        }
+
         const reader = new FileReader();
-        reader.onload = function(event) {
+        reader.onload = async function(event) {
+          let importedData;
           try {
-            const importedData = JSON.parse(event.target.result);
-            callback(importedData);
+            importedData = JSON.parse(event.target.result);
           } catch (error) {
-            AppHelper.showNotification('错误', '导入失败，文件格式不正确', 'error');
+            AppHelper.showNotification('导入失败', '文件不是合法的 JSON，已取消导入。', 'error');
+            return;
+          }
+          // 【数据安全修复】必须 await 回调。
+          // 原实现直接调用 async 回调且不等待，写盘还没完成就提示成功并刷新页面。
+          try {
+            await callback(importedData);
+          } catch (err) {
+            console.error('导入处理失败:', err);
+            AppHelper.showNotification('导入失败', '导入过程中出错：' + (err && err.message ? err.message : '未知错误'), 'error');
           }
         };
         reader.readAsText(file);
@@ -2716,11 +2966,21 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               x: {
                 grid: {
                   display: false
+                },
+                // 【UI 修复】原先一年 365 天的横轴标签全部挤在一起，完全无法阅读。
+                // 交给 Chart.js 自动抽稀，并限制刻度数量。
+                ticks: {
+                  autoSkip: true,
+                  maxTicksLimit: 8,
+                  maxRotation: 0,
+                  minRotation: 0,
+                  maxOverlap: true
                 }
               },
               y: {
                 beginAtZero: true,
                 ticks: {
+                  maxTicksLimit: 6,
                   callback: function(value) {
                     return '¥' + value;
                   }
@@ -2846,12 +3106,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                     <i class="fa ${categoryIcon} text-sm" style="color: ${categoryColor}"></i>
                   </div>
                   <div class="ml-4">
-                    <div class="text-sm font-medium text-gray-900">${categoryName}</div>
+                    <div class="text-sm font-medium text-gray-900">${esc(categoryName)}</div>
                   </div>
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${transaction.description || '-'}
+                ${esc(transaction.description || '-')}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${amountClass}">
                 ${amountSign}¥${transaction.amount.toFixed(2)}
@@ -2955,13 +3215,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                       <i class="fa ${categoryIcon} text-sm" style="color: ${categoryColor}"></i>
                     </div>
                     <div class="ml-4">
-                      <div class="text-sm font-medium text-gray-900">${categoryName}</div>
+                      <div class="text-sm font-medium text-gray-900">${esc(categoryName)}</div>
                     </div>
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  ${transaction.description || '-'}
-                  ${transaction.budgetExceedReason ? `<div class="text-xs text-gray-400 mt-1">超出预算原因: ${transaction.budgetExceedReason}</div>` : ''}
+                  ${esc(transaction.description || '-')}
+                  ${transaction.budgetExceedReason ? `<div class="text-xs text-gray-400 mt-1">超出预算原因: ${esc(transaction.budgetExceedReason)}</div>` : ''}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${amountClass}">
                   ${amountSign}¥${transaction.amount.toFixed(2)}
@@ -3224,12 +3484,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 根据选择的周期获取预算数据
         let budget;
         let currentMonthData;
+        // 【数据安全修复】本次渲染是否新建了月份预算：用于把「自动生成预算」限制为只发生一次
+        let budgetNeedsInit = false;
         
         if (period === 'monthly' && selectedMonth) {
           // 月度预算使用选中月份的数据
           if (!appData.budgets[selectedMonth]) {
             // 如果没有该月份的数据，使用月度模板
             appData.budgets[selectedMonth] = JSON.parse(JSON.stringify(appData.budgets.monthly));
+            budgetNeedsInit = true;
           }
           budget = appData.budgets[selectedMonth];
           currentMonthData = selectedMonth;
@@ -3249,8 +3512,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             const calculatedBudget = daysInMonth * 60;
             
             if (appData.budgets[monthKey]) {
-              // 如果该月份已有数据，使用其总预算，但重新计算分类预算以确保固定值正确
-              monthBudget = appData.budgets[monthKey];
+              // 【数据安全修复】深拷贝后再计算，避免「查看年度预算」污染已保存的月度预算
+              monthBudget = JSON.parse(JSON.stringify(appData.budgets[monthKey]));
               monthBudget.total = calculatedBudget;
               
               // 重新设置固定预算值
@@ -3284,8 +3547,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 monthBudget.categories[otherCategories[0]] += difference;
               }
               
-              // 保存更新后的数据
-              appData.budgets[monthKey] = monthBudget;
+              // 【数据安全修复】不再写回 appData：年度视图只是只读计算
             } else {
               // 该月份没有数据，初始化该月份的数据
               monthBudget = {
@@ -3330,8 +3592,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 monthBudget.categories[otherCategories[0]] += difference;
               }
               
-              // 保存该月份数据
-              appData.budgets[monthKey] = monthBudget;
+              // 【数据安全修复】同上，不再写回 appData
             }
             
             // 累加总预算
@@ -3357,13 +3618,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           const currentMonth = new Date().toISOString().slice(0, 7);
           if (!appData.budgets[currentMonth]) {
             appData.budgets[currentMonth] = JSON.parse(JSON.stringify(appData.budgets.monthly));
+            budgetNeedsInit = true;
           }
           budget = appData.budgets[currentMonth];
           currentMonthData = currentMonth;
         }
         
         // 根据月份天数自动生成预算：每月的天数*60就是每月的预算
-        if (currentMonthData && period !== 'yearly') {
+        // 【数据安全修复】updateBudgetPage 是纯渲染函数，绝不在此处写云端。
+        // 原实现在每次渲染时都整行回写，导致「仅打开页面」就可能把云端数据覆盖，是财务数据丢失的直接原因。
+        // 自动生成也改为仅在该月此前没有预算时执行一次，不再覆盖用户已保存的预算。
+        if (budgetNeedsInit && currentMonthData && period !== 'yearly') {
           const [year, month] = currentMonthData.split('-').map(Number);
           // 计算该月份的天数
           const daysInMonth = new Date(year, month, 0).getDate();
@@ -3371,8 +3636,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           const calculatedBudget = daysInMonth * 60;
           // 更新预算
           budget.total = calculatedBudget;
-          // 保存到云存储（在初始化时异步保存）
-          (async () => { await saveData(); })();
           
           // 确保预算分类符合要求：
           // 1. 购物预算固定为620元
@@ -3644,7 +3907,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-2">
                     <i class="fa ${category.icon}" style="color: ${category.color}"></i>
                   </div>
-                  <h4 class="text-sm font-medium text-gray-800">${category.name}</h4>
+                  <h4 class="text-sm font-medium text-gray-800">${esc(category.name)}</h4>
                 </div>
 
               </div>
@@ -3933,8 +4196,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   <i class="fa ${suggestion.icon} ${iconClass} text-xl"></i>
                 </div>
                 <div class="ml-3">
-                  <h4 class="text-base font-medium text-gray-800">${suggestion.title}</h4>
-                  <p class="mt-1 text-sm text-gray-600">${suggestion.message}</p>
+                  <h4 class="text-base font-medium text-gray-800">${esc(suggestion.title)}</h4>
+                  <p class="mt-1 text-sm text-gray-600">${esc(suggestion.message)}</p>
                 </div>
               </div>
             </div>
@@ -4029,7 +4292,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                     <h4 class="text-base font-medium text-gray-800">异常消费提醒：${anomaly.date}</h4>
                     <p class="mt-1 text-sm text-gray-600">
                       当日支出¥${anomaly.expense.toFixed(2)}，超出平均日支出${((anomaly.expense / averageDailyExpense - 1) * 100).toFixed(0)}%。
-                      最大支出为${categoryName}（¥${largestTransaction.amount.toFixed(2)}）。
+                      最大支出为${esc(categoryName)}（¥${largestTransaction.amount.toFixed(2)}）。
                     </p>
                   </div>
                 </div>
@@ -4053,6 +4316,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           console.warn('⚠️ Supabase 连接异常，数据将无法保存到云端');
         } else {
           console.log('✅ Supabase 连接正常');
+        }
+
+        // 【数据安全修复】读取失败必须让用户知道。
+        // 此时页面显示的是空数据，但存储层已拒绝一切写入，云端原有数据是安全的。
+        if (!StorageHelper.isReadOk('familyFinanceData')) {
+          console.error('❌ 财务数据读取失败，已阻止写入以保护云端数据');
+          try {
+            AppHelper.showNotification(
+              '数据加载失败',
+              '未能从云端读取财务数据。为保护你已有的数据，所有保存操作已暂停。请检查网络后刷新页面重试。',
+              'error'
+            );
+          } catch (e) { /* 通知失败不阻断初始化 */ }
         }
 
         // 初始化分类选择器
@@ -4478,8 +4754,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               const calculatedBudget = daysInMonth * 60;
               
               if (appData.budgets[monthKey]) {
-                // 如果该月份已有数据，使用其总预算，但重新计算分类预算以确保固定值正确
-                monthBudget = appData.budgets[monthKey];
+                // 【数据安全修复】深拷贝后再计算，保存预算时不再顺带改写其它月份
+                monthBudget = JSON.parse(JSON.stringify(appData.budgets[monthKey]));
                 monthBudget.total = calculatedBudget;
                 
                 // 重新设置固定预算值
@@ -4513,8 +4789,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   monthBudget.categories[otherCategories[0]] += difference;
                 }
                 
-                // 保存更新后的数据
-                appData.budgets[monthKey] = monthBudget;
+                // 【数据安全修复】不再写回 appData：只是重算年度汇总
               } else {
                 // 该月份没有数据，初始化该月份的数据
                 monthBudget = {
@@ -4559,8 +4834,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   monthBudget.categories[otherCategories[0]] += difference;
                 }
                 
-                // 保存该月份数据
-                appData.budgets[monthKey] = monthBudget;
+                // 【数据安全修复】同上，不再写回 appData
               }
               
               // 累加总预算
@@ -4628,16 +4902,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               const importedData = JSON.parse(event.target.result);
               showConfirmDialog(
                 '导入数据',
-                '导入数据将覆盖当前系统所有模块的数据，您确定要继续吗？',
+                '导入数据将覆盖当前系统所有模块的数据，覆盖前会自动备份。确定要继续吗？',
                 async () => {
-                  const success = StorageHelper.importData(importedData);
-                  if (success) {
-                    showNotification('导入成功', '系统数据已更新。');
+                  // 【数据安全修复】importData 已改为 async，必须 await。
+                  // 原实现拿到的是一个 Promise（永远为真），于是必定提示「导入成功」
+                  // 并在 800ms 后刷新页面，而写入其实还没完成。
+                  const result = await StorageHelper.importData(importedData);
+                  if (result && result.ok) {
+                    showNotification('导入成功', result.message);
                     setTimeout(() => {
                       window.location.reload();
                     }, 800);
                   } else {
-                    showNotification('导入失败', '导入数据解析失败。', 'error');
+                    showNotification('导入失败', (result && result.message) || '导入数据解析失败。', 'error');
                   }
                 }
               );
@@ -5673,12 +5950,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   ${typeText}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">${categoryName}</td>
+              <td class="px-6 py-4 whitespace-nowrap">${esc(categoryName)}</td>
               <td class="px-6 py-4 whitespace-nowrap font-medium ${typeClass}">
                 ¥${transaction.amount.toFixed(2)}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${transaction.description || '-'}
+                ${esc(transaction.description || '-')}
               </td>
             </tr>
           `;
@@ -6706,7 +6983,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <i class="fa fa-calendar mr-1"></i>月计划目标
             </h4>
             <div id="monthlyPlanGoalDisplay" class="text-sm text-gray-700 mb-3 whitespace-pre-wrap"></div>
-            <div id="monthlyPlanCourses" class="flex flex-wrap gap-2"></div>
+            <div id="monthlyPlanCoursesDisplay" class="flex flex-wrap gap-2"></div>
           </div>
         </div>
 
@@ -6929,6 +7206,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       studyData.records = Array.isArray(savedData.records) ? savedData.records : [];
       studyData.monthlyPlans = Array.isArray(savedData.monthlyPlans) ? savedData.monthlyPlans : [];
       studyData.weeklyPlans = Array.isArray(savedData.weeklyPlans) ? savedData.weeklyPlans : [];
+      // 【XSS 修复】加载时也清理 id：既防止 onclick 注入，也净化历史遗留的脏 id
+      AppHelper.sanitizeIds('studyData', {
+        plans: studyData.plans, courses: studyData.courses, records: studyData.records,
+        monthlyPlans: studyData.monthlyPlans, weeklyPlans: studyData.weeklyPlans
+      });
     }
 
     // 保存学习数据到云存储
@@ -7230,6 +7512,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
     }
 
+    // 【缺陷修复】统计 [startDate, endDate] 之间实际跨越的周数（按周一对齐）。
+    // 用途：跨年时 ISO 周号会从 53 跳回 1，直接用 endWeek - startWeek + 1 会得到负数。
+    // 该函数结果恒 >= 1，可安全用作除数。
+    function countWeeksInRange(startDate, endDate) {
+      const s = new Date(startDate); s.setHours(0, 0, 0, 0);
+      const e = new Date(endDate); e.setHours(0, 0, 0, 0);
+      // 对齐到当周的周一
+      const sMon = new Date(s); sMon.setDate(s.getDate() - ((s.getDay() + 6) % 7));
+      const eMon = new Date(e); eMon.setDate(e.getDate() - ((e.getDay() + 6) % 7));
+      const weeks = Math.round((eMon - sMon) / (7 * 86400000)) + 1;
+      return Math.max(1, weeks);
+    }
+
     // 计算连续学习天数
     function calculateStudyStreak() {
       if (studyData.records.length === 0) return 0;
@@ -7291,7 +7586,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
                 <i class="fa fa-graduation-cap text-indigo-600 text-xs"></i>
               </div>
-              <span class="text-sm font-medium text-gray-700">${course.name}</span>
+              <span class="text-sm font-medium text-gray-700">${esc(course.name)}</span>
             </label>
           `;
           coursesContainer.appendChild(courseItem);
@@ -7547,7 +7842,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <div class="flex flex-wrap gap-2">
                   ${matchedCourses.map(course => `
                     <span class="px-2 py-1 bg-purple-50 text-purple-700 text-sm rounded-md border border-purple-200">
-                      ${course.name}
+                      ${esc(course.name)}
                     </span>
                   `).join('')}
                 </div>
@@ -7559,7 +7854,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <div class="text-xs font-semibold text-indigo-600 mb-2">
                 <i class="fa fa-bullseye mr-1"></i>学习目标：
               </div>
-              <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg leading-relaxed">${plan.goal}</div>
+              <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg leading-relaxed">${esc(plan.goal)}</div>
             </div>
 
             <!-- 学习进度 -->
@@ -7640,15 +7935,22 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const monthStart = new Date(monthlyPlan.year, monthlyPlan.month - 1, 1);
       const monthEnd = new Date(monthlyPlan.year, monthlyPlan.month, 0);
       const startWeek = getWeekNumber(monthStart);
-      const endWeek = getWeekNumber(monthEnd);
-      const totalWeeks = endWeek - startWeek + 1;
+      // 【缺陷修复】原式 endWeek - startWeek + 1 在跨年月份会算出负数
+      //（如 2027 年 1 月：1/1 属第 53 周、1/31 属第 4 周 → -48），
+      // 导致「一键生成周计划」静默生成 0 条，且目标时长为负。改为按实际跨越周数计算。
+      let totalWeeks = getWeekNumber(monthEnd) - startWeek + 1;
+      if (totalWeeks < 1) {
+        totalWeeks = countWeeksInRange(monthStart, monthEnd);
+      }
+      totalWeeks = Math.max(1, totalWeeks);
 
       // 检查是否有关联课程
       let targetHours = 20; // 默认每周20小时
       if (monthlyPlan.courseId) {
         const course = studyData.courses.find(c => c.id === monthlyPlan.courseId);
         if (course) {
-          targetHours = Math.ceil(course.totalLessons / totalWeeks);
+          // 【缺陷修复】除数已保证 >=1，这里再兜底一次，避免负时长入库
+          targetHours = Math.max(0, Math.ceil((course.totalLessons || 0) / totalWeeks));
         }
       }
 
@@ -7773,7 +8075,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const monthIdInput = document.getElementById('weeklyPlanMonthly');
       const monthlyPlanInfo = document.getElementById('monthlyPlanInfo');
       const monthlyPlanGoalDisplay = document.getElementById('monthlyPlanGoalDisplay');
+      // 【缺陷修复】原来页面上有两个同名的 monthlyPlanCourses：
+      // 一个是月计划弹窗里的「关联课程」复选框容器，一个是周计划弹窗里的只读展示区。
+      // getElementById 只会返回第一个，于是下面的展示标签被写进了复选框容器，
+      // 一旦选择月计划，「关联课程」的勾选框就会被整个清空。
+      // 现在把展示区改成独立 id，两者各归各位。
       const monthlyPlanCourses = document.getElementById('monthlyPlanCourses');
+      const monthlyPlanCoursesDisplay = document.getElementById('monthlyPlanCoursesDisplay');
       const weekSelector = document.getElementById('weekSelector');
       const editingPlanId = document.getElementById('weeklyPlanId').value;
       let editingWeekInMonth = null;
@@ -7827,9 +8135,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         }
       }
 
-      monthlyPlanCourses.innerHTML = matchedCourses.map(course => `
+      // 【缺陷修复】写入只读展示区，而不是复选框容器
+      monthlyPlanCoursesDisplay.innerHTML = matchedCourses.map(course => `
         <span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-md">
-          ${course.name}
+          ${esc(course.name)}
         </span>
       `).join('');
 
@@ -8266,7 +8575,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <div class="flex flex-wrap gap-2">
                   ${matchedCourses.map(course => `
                     <span class="px-2 py-1 bg-purple-50 text-purple-700 text-sm rounded-md border border-purple-200">
-                      ${course.name}
+                      ${esc(course.name)}
                     </span>
                   `).join('')}
                 </div>
@@ -8278,7 +8587,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <div class="text-xs font-semibold text-indigo-600 mb-2">
                 <i class="fa fa-bullseye mr-1"></i>本周学习目标：
               </div>
-              <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg leading-relaxed">${plan.goal || '暂无学习目标'}</div>
+              <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg leading-relaxed">${esc(plan.goal || '暂无学习目标')}</div>
             </div>
 
             <!-- 学习进度 -->
@@ -8406,8 +8715,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 计算本月剩余周数
       const monthStart = new Date(currentYear, currentMonth - 1, 1);
       const monthEnd = new Date(currentYear, currentMonth, 0);
-      const totalWeeksInMonth = getWeekNumber(monthEnd) - getWeekNumber(monthStart) + 1;
-      const currentWeekInMonth = currentWeek - getWeekNumber(monthStart) + 1;
+      // 【缺陷修复】跨年月份（如 2027 年 1 月）ISO 周号会从 53 跳回 1，
+      // 直接相减会得到负数，进而算出负的目标时长。改为兜底为实际跨越周数。
+      let totalWeeksInMonth = getWeekNumber(monthEnd) - getWeekNumber(monthStart) + 1;
+      if (totalWeeksInMonth < 1) {
+        totalWeeksInMonth = countWeeksInRange(monthStart, monthEnd);
+      }
+      totalWeeksInMonth = Math.max(1, totalWeeksInMonth);
+      const currentWeekInMonth = Math.min(
+        totalWeeksInMonth,
+        Math.max(1, currentWeek - getWeekNumber(monthStart) + 1)
+      );
 
       // 检查是否有关联课程,如果有则根据课程总时长计算周目标
       let targetHours = 20; // 默认每周20小时
@@ -8417,8 +8735,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const course = studyData.courses.find(c => c.id === monthlyPlan.courseId);
         if (course) {
           // 根据课程总时长和剩余周数动态计算
-          const remainingWeeks = totalWeeksInMonth - currentWeekInMonth + 1;
-          targetHours = Math.ceil(course.totalLessons / remainingWeeks);
+          const remainingWeeks = Math.max(1, totalWeeksInMonth - currentWeekInMonth + 1);
+          targetHours = Math.max(0, Math.ceil((course.totalLessons || 0) / remainingWeeks));
           weeklyGoal = `课程学习进度: 第${currentWeekInMonth}/${totalWeeksInMonth}周\n目标: 完成课程${targetHours}小时的学习内容\n课程: ${course.name}`;
         }
       }
@@ -8484,11 +8802,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               </span>
               ${courseName ? `
                 <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                  <i class="fa fa-book mr-1"></i>${courseName}
+                  <i class="fa fa-book mr-1"></i>${esc(courseName)}
                 </span>
               ` : ''}
             </div>
-            <p class="text-sm text-gray-700 line-clamp-2">${monthlyPlan.goal.substring(0, 100)}...</p>
+            <p class="text-sm text-gray-700 line-clamp-2">${esc(monthlyPlan.goal.substring(0, 100))}...</p>
             <div class="flex items-center gap-2 mt-2">
               <span class="text-xs text-gray-500">进度: ${completedWeekPlans}/${relatedWeekPlans.length}周</span>
               <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -8651,11 +8969,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <i class="fa fa-book text-indigo-600"></i>
               </div>
               <div class="flex-1">
-                <p class="font-medium text-gray-800">${courseName}</p>
+                <p class="font-medium text-gray-800">${esc(courseName)}</p>
                 <p class="text-sm text-gray-500">
                   ${record.date} ${timeInfo ? `· ${timeInfo}` : ''} · ${record.duration}分钟
                 </p>
-                ${record.content ? `<p class="text-xs text-gray-400 mt-1 truncate">${record.content}</p>` : ''}
+                ${record.content ? `<p class="text-xs text-gray-400 mt-1 truncate">${esc(record.content)}</p>` : ''}
               </div>
             </div>
             <span class="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">完成</span>
@@ -8763,7 +9081,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           <div class="bg-white rounded-xl shadow-lg overflow-hidden border-l-4 ${colors.border}">
             <div class="p-6">
               <div class="flex items-start justify-between mb-3">
-                <h4 class="text-lg font-semibold ${colors.text}">${plan.name}</h4>
+                <h4 class="text-lg font-semibold ${esc(colors.text)}">${esc(plan.name)}</h4>
                 <div class="flex space-x-2">
                   <button onclick="openStudyPlanModal('${plan.id}')" class="text-gray-500 hover:text-indigo-600">
                     <i class="fa fa-edit"></i>
@@ -8773,7 +9091,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   </button>
                 </div>
               </div>
-              <p class="text-gray-600 text-sm mb-4">${plan.description || '暂无描述'}</p>
+              <p class="text-gray-600 text-sm mb-4">${esc(plan.description || '暂无描述')}</p>
               <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
                 <span>开始: ${plan.startDate}</span>
                 <span>目标: ${plan.endDate}</span>
@@ -8783,7 +9101,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               </div>
               <div class="flex items-center justify-between text-xs">
                 <span class="text-gray-600">进度: ${progress.toFixed(0)}%</span>
-                <span class="px-2 py-1 ${colors.bg} ${colors.text} rounded-full text-xs">优先级: ${priorityLabels[plan.priority]}</span>
+                <span class="px-2 py-1 ${colors.bg} ${esc(colors.text)} rounded-full text-xs">优先级: ${priorityLabels[plan.priority]}</span>
               </div>
             </div>
           </div>
@@ -8995,7 +9313,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <div class="bg-gradient-to-r ${colors.gradient} p-4">
                 <div class="flex items-start justify-between">
                   <div class="flex-1 min-w-0">
-                    <h4 class="text-white font-bold text-lg truncate">${course.name}</h4>
+                    <h4 class="text-white font-bold text-lg truncate">${esc(course.name)}</h4>
                     <div class="flex items-center gap-2 mt-1">
                       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
                         <i class="fa ${colors.icon} mr-1"></i>${statusLabels[course.status]}
@@ -9385,7 +9703,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   <div class="bg-indigo-100 p-1.5 rounded-lg">
                     <i class="fa fa-book text-indigo-600 text-sm"></i>
                   </div>
-                  <span class="font-semibold text-gray-800 text-sm">${courseName}</span>
+                  <span class="font-semibold text-gray-800 text-sm">${esc(courseName)}</span>
                   <button onclick="deleteStudyRecord('${record.id}')" class="text-gray-400 hover:text-red-600 p-1 ml-auto">
                     <i class="fa fa-trash text-xs"></i>
                   </button>
@@ -9406,7 +9724,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   <div class="text-xs text-gray-700 bg-white rounded p-2 border border-gray-100">
                     <div class="flex items-start gap-1">
                       <i class="fa fa-pencil text-gray-400 mt-0.5"></i>
-                      <span>${record.content}</span>
+                      <span>${esc(record.content)}</span>
                     </div>
                   </div>
                 ` : ''}
@@ -9414,7 +9732,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <!-- 备注 -->
                 ${record.note ? `
                   <div class="text-xs text-gray-400 mt-1">
-                    <i class="fa fa-sticky-note mr-1"></i>${record.note}
+                    <i class="fa fa-sticky-note mr-1"></i>${esc(record.note)}
                   </div>
                 ` : ''}
               </div>
@@ -10082,7 +10400,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <div class="flex items-center justify-between mb-1">
               <div class="flex items-center gap-2 flex-1 min-w-0">
                 <div class="w-3 h-3 rounded-full flex-shrink-0" style="background: linear-gradient(135deg, ${color.gradient[0]}, ${color.gradient[1]})"></div>
-                <span class="text-sm font-medium text-gray-700 truncate">${course.name}</span>
+                <span class="text-sm font-medium text-gray-700 truncate">${esc(course.name)}</span>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
                 <span class="text-xs font-semibold" style="color: ${color.border}">${durationText}</span>
@@ -10196,13 +10514,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return `
           <div class="flex items-center gap-2 p-2 rounded-lg ${color.bg} border ${color.border}">
             <div class="flex-shrink-0 w-6 h-6 rounded-full bg-white flex items-center justify-center">
-              <i class="fa fa-graduation-cap ${color.text} text-xs"></i>
+              <i class="fa fa-graduation-cap ${esc(color.text)} text-xs"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-xs font-medium ${color.text} truncate">${courseInfo.name}</div>
-              <div class="text-xs text-gray-500">${record.content || '学习内容'}</div>
+              <div class="text-xs font-medium ${esc(color.text)} truncate">${esc(courseInfo.name)}</div>
+              <div class="text-xs text-gray-500">${esc(record.content || '学习内容')}</div>
             </div>
-            <div class="flex-shrink-0 text-xs ${color.text} font-medium">${durationText}</div>
+            <div class="flex-shrink-0 text-xs ${esc(color.text)} font-medium">${durationText}</div>
           </div>
         `;
       }).join('');
@@ -10328,34 +10646,77 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     // 移除HTML标签
     function stripHtml(html) {
-      const div = document.createElement('div');
-      div.innerHTML = html;
-      return div.textContent || div.innerText || '';
+      // 【XSS 修复】原来用 detached div 的 innerHTML 来剥标签，
+      // 但 innerHTML 赋值同样会触发 <img onerror> 等处理器，仍是一个可利用的注入点。
+      // 改用 DOMParser：它只解析、不执行脚本、不加载资源。
+      if (html === null || html === undefined) return '';
+      try {
+        const doc = new DOMParser().parseFromString(String(html), 'text/html');
+        return (doc.body && doc.body.textContent) || '';
+      } catch (e) {
+        return String(html);
+      }
     }
 
     // 导入学习数据
     function importStudyData(e) {
-      AppHelper.importData(e, async function(importedData) {
-        studyData.plans = importedData.plans || [];
-        studyData.courses = importedData.courses || [];
-        
-        // 兼容旧版本数据，为学习记录添加新字段
-        studyData.records = (importedData.records || []).map(record => ({
-          ...record,
-          startTime: record.startTime || null,
-          endTime: record.endTime || null,
-          content: record.content || (record.note || '')
-        }));
-        
-        studyData.monthlyPlans = importedData.monthlyPlans || [];
-        studyData.weeklyPlans = importedData.weeklyPlans || [];
-        await saveStudyData();
-        renderStudyPlans();
-        renderCourses();
-        renderStudyRecords();
-        updateStudyDashboard();
-        updateStudyCharts();
-        AppHelper.showNotification('成功', '学习数据已导入', 'success');
+      AppHelper.importData(e, function(importedData) {
+        // 【数据安全修复】先校验结构，再要求确认，最后才允许覆盖
+        const check = AppHelper.validateModule('studyData', importedData);
+        if (!check.ok) {
+          AppHelper.showNotification('导入已取消', '文件结构不正确：' + check.errors.slice(0, 3).join('；'), 'error');
+          return;
+        }
+        // 【XSS 修复】清理 id，防止 onclick 属性注入
+        AppHelper.sanitizeIds('studyData', importedData);
+        const total = (importedData.plans || []).length + (importedData.courses || []).length
+          + (importedData.records || []).length + (importedData.monthlyPlans || []).length
+          + (importedData.weeklyPlans || []).length;
+        if (total === 0) {
+          AppHelper.showNotification('导入已取消', '该文件不含任何学习数据。为避免误清空云端数据，已拒绝导入。', 'error');
+          return;
+        }
+
+        // 【数据安全修复】原来学习模块导入完全没有确认框，误选文件即造成不可逆覆盖
+        showConfirmDialog(
+          '导入学习数据',
+          `将用文件中的 ${total} 条数据覆盖当前学习模块。覆盖前会自动把现有数据备份到云端。确定继续吗？`,
+          async function() {
+            // 先备份当前数据
+            await AppHelper.backupBeforeImport('studyData', {
+              plans: studyData.plans, courses: studyData.courses, records: studyData.records,
+              monthlyPlans: studyData.monthlyPlans, weeklyPlans: studyData.weeklyPlans
+            });
+
+            studyData.plans = importedData.plans || [];
+            studyData.courses = importedData.courses || [];
+
+            // 兼容旧版本数据，为学习记录添加新字段
+            studyData.records = (importedData.records || []).map(function(record) {
+              return Object.assign({}, record, {
+                startTime: record.startTime || null,
+                endTime: record.endTime || null,
+                content: record.content || (record.note || '')
+              });
+            });
+
+            studyData.monthlyPlans = importedData.monthlyPlans || [];
+            studyData.weeklyPlans = importedData.weeklyPlans || [];
+
+            // 【数据安全修复】以真实写入结果决定提示，不再无条件报「成功」
+            const ok = await saveStudyData();
+            if (!ok) {
+              AppHelper.showNotification('导入未生效', '数据未写入云端（可能是网络异常，或其它页面已修改数据）。当前学习数据没有被覆盖，请刷新后重试。', 'error');
+              return;
+            }
+            renderStudyPlans();
+            renderCourses();
+            renderStudyRecords();
+            updateStudyDashboard();
+            updateStudyCharts();
+            AppHelper.showNotification('成功', '学习数据已导入（原数据已自动备份）', 'success');
+          }
+        );
       });
     }
 
@@ -10417,6 +10778,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 确保数据结构的完整性
       houseworkData.tasks = Array.isArray(savedData.tasks) ? savedData.tasks : [];
       houseworkData.types = Array.isArray(savedData.types) ? savedData.types : [];
+      // 【XSS 修复】加载时也清理 id，防止 onclick / data-* 属性注入
+      AppHelper.sanitizeIds('houseworkData', houseworkData);
     }
 
     // 保存家务数据到云存储
@@ -10684,7 +11047,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return `
           <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div class="flex items-center">
-              <span class="inline-flex items-center px-3 py-1 bg-teal-100 text-teal-700 text-sm rounded-md mr-3">${typeName}</span>
+              <span class="inline-flex items-center px-3 py-1 bg-teal-100 text-teal-700 text-sm rounded-md mr-3">${esc(typeName)}</span>
               <span class="text-sm text-gray-600">${stats.completed}/${stats.total} 已完成</span>
             </div>
             <div class="w-32">
@@ -10763,7 +11126,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       if (id) {
         const index = houseworkData.tasks.findIndex(t => t.id === id);
         if (index !== -1) {
-          houseworkData.tasks[index] = newTaskData;
+          // 【缺陷修复】原来整对象替换会丢掉表单里没有的字段（如 assignee），
+          // 导致「编辑一次家务，该字段就被静默清空」。改为展开合并，保留未编辑的字段。
+          houseworkData.tasks[index] = { ...houseworkData.tasks[index], ...newTaskData };
         }
       } else {
         houseworkData.tasks.push(newTaskData);
@@ -11094,7 +11459,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   <div class="bg-teal-100 p-1.5 rounded-lg">
                     <i class="fa fa-check text-teal-600 text-sm"></i>
                   </div>
-                  <span class="font-semibold text-gray-800 text-sm flex-1">${task.title}</span>
+                  <span class="font-semibold text-gray-800 text-sm flex-1">${esc(task.title)}</span>
                   <button onclick="deleteHousework('${task.id}')" class="text-gray-400 hover:text-red-600 p-1">
                     <i class="fa fa-trash text-xs"></i>
                   </button>
@@ -11103,9 +11468,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <!-- 类型和优先级标签 -->
                 <div class="flex items-center gap-2 mb-2">
                   <span class="px-2 py-0.5 bg-teal-50 text-teal-600 text-xs rounded-full border border-teal-100">
-                    <i class="fa fa-tag mr-1"></i>${typeName}
+                    <i class="fa fa-tag mr-1"></i>${esc(typeName)}
                   </span>
-                  <span class="px-2 py-0.5 ${colors.bg} ${colors.text} text-xs rounded-full border ${colors.border}">
+                  <span class="px-2 py-0.5 ${colors.bg} ${esc(colors.text)} text-xs rounded-full border ${colors.border}">
                     ${task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}优先级
                   </span>
                 </div>
@@ -11122,7 +11487,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   <div class="text-xs text-gray-700 bg-white rounded p-2 border border-gray-100 mt-2">
                     <div class="flex items-start gap-1">
                       <i class="fa fa-align-left text-gray-400 mt-0.5"></i>
-                      <span class="line-clamp-2">${task.description}</span>
+                      <span class="line-clamp-2">${esc(task.description)}</span>
                     </div>
                   </div>
                 ` : ''}
@@ -11284,7 +11649,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                     <i class="fa fa-clock-o mr-1"></i>${daysOverdue}
                   </span>
                 </div>
-                ${task.description ? `<p class="text-gray-600 text-sm mb-3">${task.description}</p>` : ''}
+                ${task.description ? `<p class="text-gray-600 text-sm mb-3">${esc(task.description)}</p>` : ''}
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                   ${statusBadge[task.status]}
                   ${typeBadge}
@@ -11299,16 +11664,16 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             </div>
             <div class="flex space-x-2 ml-4">
               ${task.status === 'pending' ? `
-                <button class="start-housework-btn p-2 text-gray-400 hover:text-blue-600 transition-colors" data-housework-id="${task.id}" title="开始进行">
+                <button class="start-housework-btn p-2 text-gray-400 hover:text-blue-600 transition-colors" data-housework-id="${esc(task.id)}" title="开始进行">
                   <i class="fa fa-play"></i>
                 </button>
               ` : ''}
               ${task.status === 'in-progress' ? `
-                <button class="complete-housework-btn p-2 text-gray-400 hover:text-green-600 transition-colors" data-housework-id="${task.id}" title="标记完成">
+                <button class="complete-housework-btn p-2 text-gray-400 hover:text-green-600 transition-colors" data-housework-id="${esc(task.id)}" title="标记完成">
                   <i class="fa fa-check"></i>
                 </button>
               ` : ''}
-              <button class="delete-housework-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-housework-id="${task.id}" title="删除">
+              <button class="delete-housework-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-housework-id="${esc(task.id)}" title="删除">
                 <i class="fa fa-trash"></i>
               </button>
             </div>
@@ -11446,7 +11811,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return `
           <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
             <div class="flex items-center flex-1">
-              <button class="delete-housework-btn mr-3" data-housework-id="${task.id}" title="删除家务">
+              <button class="delete-housework-btn mr-3" data-housework-id="${esc(task.id)}" title="删除家务">
                 <i class="fa fa-check-circle text-gray-400 text-lg hover:text-red-500"></i>
               </button>
               <div class="flex-1">
@@ -11505,7 +11870,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       // 只有已完成的家务才显示左上角删除按钮
       const deleteButton = isCompleted ? `
-        <button class="delete-housework-btn mt-1 mr-3" data-housework-id="${task.id}" title="删除家务">
+        <button class="delete-housework-btn mt-1 mr-3" data-housework-id="${esc(task.id)}" title="删除家务">
           <i class="fa fa-check-circle text-gray-400 hover:text-red-500 text-xl hover:scale-110 transition-transform"></i>
         </button>
       ` : '';
@@ -11517,7 +11882,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               ${deleteButton}
               <div class="flex-1">
                 <h4 class="text-lg font-semibold ${isCompleted ? 'line-through text-gray-400' : colors.text} mb-2">${task.title}</h4>
-                ${task.description ? `<p class="text-gray-600 text-sm mb-3">${task.description}</p>` : ''}
+                ${task.description ? `<p class="text-gray-600 text-sm mb-3">${esc(task.description)}</p>` : ''}
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                   ${statusBadge[task.status]}
                   ${typeBadge}
@@ -11533,12 +11898,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             </div>
             <div class="flex space-x-2 ml-4">
               ${task.status === 'pending' ? `
-                <button class="start-housework-btn p-2 text-gray-400 hover:text-blue-600 transition-colors" data-housework-id="${task.id}" title="开始进行">
+                <button class="start-housework-btn p-2 text-gray-400 hover:text-blue-600 transition-colors" data-housework-id="${esc(task.id)}" title="开始进行">
                   <i class="fa fa-play"></i>
                 </button>
               ` : ''}
               ${task.status === 'in-progress' ? `
-                <button class="complete-housework-btn p-2 text-gray-400 hover:text-green-600 transition-colors" data-housework-id="${task.id}" title="标记完成">
+                <button class="complete-housework-btn p-2 text-gray-400 hover:text-green-600 transition-colors" data-housework-id="${esc(task.id)}" title="标记完成">
                   <i class="fa fa-check"></i>
                 </button>
               ` : ''}
@@ -11560,18 +11925,49 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     // 导入家务数据
     function importHouseworkData(e) {
-      AppHelper.importData(e, async function(importedData) {
-        houseworkData.tasks = importedData.tasks || [];
-        houseworkData.types = importedData.types || [];
-        await saveHouseworkData();
-        updateHouseworkDashboard();
-        renderPendingHousework();
-        renderInProgressHousework();
-        renderCompletedHousework();
-        renderOverdueHousework();
-        renderRecentHousework();
-        updateHouseworkStatistics();
-        AppHelper.showNotification('成功', '家务数据已导入', 'success');
+      AppHelper.importData(e, function(importedData) {
+        // 【数据安全修复】先校验结构
+        const check = AppHelper.validateModule('houseworkData', importedData);
+        if (!check.ok) {
+          AppHelper.showNotification('导入已取消', '文件结构不正确：' + check.errors.slice(0, 3).join('；'), 'error');
+          return;
+        }
+        // 【XSS 修复】清理 id，防止 onclick / data-* 属性注入
+        AppHelper.sanitizeIds('houseworkData', importedData);
+        const total = (importedData.tasks || []).length;
+        if (total === 0) {
+          AppHelper.showNotification('导入已取消', '该文件不含任何家务任务。为避免误清空云端数据，已拒绝导入。', 'error');
+          return;
+        }
+
+        // 【数据安全修复】补上确认框（原来完全没有）
+        showConfirmDialog(
+          '导入家务数据',
+          `将用文件中的 ${total} 条任务覆盖当前家务模块。覆盖前会自动把现有数据备份到云端。确定继续吗？`,
+          async function() {
+            await AppHelper.backupBeforeImport('houseworkData', {
+              tasks: houseworkData.tasks, types: houseworkData.types
+            });
+
+            houseworkData.tasks = importedData.tasks || [];
+            houseworkData.types = importedData.types || [];
+
+            // 【数据安全修复】以真实写入结果决定提示
+            const ok = await saveHouseworkData();
+            if (!ok) {
+              AppHelper.showNotification('导入未生效', '数据未写入云端（可能是网络异常，或其它页面已修改数据）。当前家务数据没有被覆盖，请刷新后重试。', 'error');
+              return;
+            }
+            updateHouseworkDashboard();
+            renderPendingHousework();
+            renderInProgressHousework();
+            renderCompletedHousework();
+            renderOverdueHousework();
+            renderRecentHousework();
+            updateHouseworkStatistics();
+            AppHelper.showNotification('成功', '家务数据已导入（原数据已自动备份）', 'success');
+          }
+        );
       });
     }
 
@@ -11774,4 +12170,225 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     // 初始化家务管理模块
     document.addEventListener('DOMContentLoaded', initHouseworkModule);
   </script>
+  <!-- ============================================================
+       设计系统层（UI 排版优化）
+       放在 </body> 之前，是为了确保它在 Tailwind CDN 运行时注入的样式表
+       之后生效（文档顺序靠后 = 同优先级时胜出）。
+       原则：只改视觉，不动任何布局结构与交互逻辑。
+       ============================================================ -->
+  <style id="app-design-system">
+    :root {
+      --app-radius: 14px;
+      --app-radius-lg: 18px;
+      --app-border: #e6e8ee;
+      --app-border-strong: #d5d9e3;
+      --app-surface: rgba(255, 255, 255, 0.86);
+      --app-surface-solid: #ffffff;
+      --app-shadow: 0 1px 2px rgba(17, 24, 39, .04), 0 8px 24px -14px rgba(17, 24, 39, .18);
+      --app-shadow-hover: 0 2px 6px rgba(17, 24, 39, .06), 0 18px 40px -18px rgba(79, 70, 229, .30);
+      --app-ring: 0 0 0 3px rgba(99, 102, 241, .16);
+      --app-ink: #1f2430;
+      --app-muted: #6b7280;
+    }
+
+    /* ---------- 1. 基础排版 ---------- */
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      color: var(--app-ink);
+      font-feature-settings: "tnum" 1;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* 金额/数字统一等宽，避免数值跳动时左右抖动 */
+    .tabular, table td, table th,
+    #monthlyIncome, #monthlyExpense, #monthlyBalance,
+    #yearlyExpense, #yearlyBalance, #homeYearlyExpense, #homeYearlyBalance,
+    #totalBudget, #usedBudget, #remainingBudget {
+      font-variant-numeric: tabular-nums;
+    }
+
+    ::selection { background: rgba(99, 102, 241, .18); }
+
+    /* 键盘可达性：统一焦点环，不再依赖各控件零散定义的 focus:ring */
+    :focus-visible {
+      outline: 2px solid #6366f1;
+      outline-offset: 2px;
+      border-radius: 8px;
+    }
+
+    /* ---------- 2. 顶部导航 / 页头统一 ---------- */
+    nav.sticky, header.sticky {
+      background: var(--app-surface) !important;
+      backdrop-filter: saturate(180%) blur(14px);
+      -webkit-backdrop-filter: saturate(180%) blur(14px);
+      border-bottom: 1px solid var(--app-border) !important;
+      box-shadow: 0 1px 2px rgba(17, 24, 39, .03);
+      z-index: 40 !important;
+    }
+    nav.sticky h1, header.sticky h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* 页头按钮：不再换行，窄屏靠图标表达 */
+    nav.sticky button, header.sticky button { white-space: nowrap; }
+
+    /* ---------- 3. 卡片 ---------- */
+    .shadow-card, .shadow-soft {
+      border-radius: var(--app-radius-lg) !important;
+      box-shadow: var(--app-shadow) !important;
+      border: 1px solid var(--app-border) !important;
+      transition: box-shadow .25s ease, transform .25s ease;
+    }
+    .shadow-card:hover, .shadow-soft:hover { box-shadow: var(--app-shadow-hover) !important; }
+
+    /* 统计卡片：降低过度饱和的彩色投影，改用克制的悬浮反馈 */
+    .group.shadow-lg, .hover\\:shadow-xl {
+      box-shadow: var(--app-shadow) !important;
+      border: 1px solid var(--app-border) !important;
+    }
+    .group.shadow-lg:hover, .hover\\:shadow-xl:hover {
+      box-shadow: var(--app-shadow-hover) !important;
+      transform: translateY(-2px);
+    }
+
+    /* ---------- 4. 表格 ---------- */
+    table { border-collapse: separate; border-spacing: 0; }
+
+    table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f8fafc;
+      color: #475569;
+      font-weight: 600;
+      font-size: .8125rem;
+      letter-spacing: .02em;
+      text-align: left;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--app-border);
+    }
+
+    table tbody td {
+      padding-top: .875rem;
+      padding-bottom: .875rem;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    table tbody tr:last-child td { border-bottom: none; }
+    table tbody tr { transition: background-color .15s ease; }
+    table tbody tr:hover { background: #fafbff; }
+
+    /* 窄屏下表格可横向滚动，而不是把列挤扁 */
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .table-scroll > table { min-width: 560px; }
+
+    /* ---------- 5. 表单控件 ---------- */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select, textarea {
+      min-height: 2.75rem;
+      border-radius: 10px !important;
+      border-color: var(--app-border-strong) !important;
+      background-color: #fff;
+      color: var(--app-ink);
+      transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    textarea { min-height: 6rem; line-height: 1.7; }
+    input:focus, select:focus, textarea:focus {
+      border-color: #818cf8 !important;
+      box-shadow: var(--app-ring) !important;
+      outline: none;
+    }
+    input::placeholder, textarea::placeholder { color: #a8b0bd; }
+
+    /* 复选框 / 单选框：统一尺寸与主色 */
+    input[type="checkbox"], input[type="radio"] {
+      width: 1.05rem; height: 1.05rem;
+      accent-color: #6366f1;
+      cursor: pointer;
+    }
+
+    label { color: #374151; }
+
+    /* ---------- 6. 按钮 ---------- */
+    button {
+      transition: background-color .18s ease, color .18s ease,
+                  box-shadow .18s ease, transform .18s ease;
+      cursor: pointer;
+    }
+    button:active { transform: translateY(0) scale(.99); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    /* 去掉各按钮上五颜六色的重投影，统一为克制的层级 */
+    button[class*="shadow-lg"] { box-shadow: var(--app-shadow) !important; }
+    button[class*="shadow-lg"]:hover { box-shadow: var(--app-shadow-hover) !important; }
+
+    /* ---------- 7. 标签页（胶囊） ---------- */
+    #tabNav, #studyTabNav, #houseworkTabNav {
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    #tabNav::-webkit-scrollbar,
+    #studyTabNav::-webkit-scrollbar,
+    #houseworkTabNav::-webkit-scrollbar { display: none; }
+    #tabNav button, #studyTabNav button, #houseworkTabNav button {
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+
+    /* ---------- 8. 弹窗 ---------- */
+    .fixed.inset-0 > div {
+      border-radius: var(--app-radius-lg) !important;
+      box-shadow: 0 24px 64px -24px rgba(17, 24, 39, .45) !important;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    /* ---------- 9. 滚动条 ---------- */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: #cfd5e0;
+      border-radius: 999px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: #b6bfcd; background-clip: content-box; }
+
+    /* ---------- 10. 无障碍：尊重「减少动态效果」 ---------- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+      }
+    }
+
+    /* ---------- 11. 窄屏排版 ---------- */
+    @media (max-width: 640px) {
+      /* 仪表盘统计卡片：两列排布，避免首屏要滚很久才看到全部指标 */
+      #dashboard-tab-content > div.grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: .625rem !important;
+      }
+      #dashboard-tab-content > div.grid > div { padding: .875rem !important; border-radius: var(--app-radius) !important; }
+      #dashboard-tab-content > div.grid p.text-lg,
+      #dashboard-tab-content > div.grid p.text-xl { font-size: 1.0625rem !important; letter-spacing: -.01em; }
+      #dashboard-tab-content > div.grid .rounded-full.p-2 { padding: .375rem !important; }
+      #dashboard-tab-content > div.grid .fa-arrow-up,
+      #dashboard-tab-content > div.grid .fa-arrow-down { font-size: .75rem !important; }
+
+      /* 首页欢迎横幅：窄屏下减小内边距与字号 */
+      main > div.rounded-3xl { padding: 1.75rem 1.25rem !important; }
+
+      /* 标签页胶囊：窄屏缩小内边距，留出更多横向空间 */
+      #tabNav button, #studyTabNav button, #houseworkTabNav button {
+        padding-left: .875rem !important;
+        padding-right: .875rem !important;
+        font-size: .8125rem !important;
+      }
+    }
+  </style>
 </body></html>
