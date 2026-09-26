@@ -259,15 +259,15 @@
               <i class="fa fa-money text-blue-600 text-2xl sm:text-3xl"></i>
             </div>
             <div>
-              <p class="text-xs font-medium text-gray-500 mb-1">本月收支</p>
+              <p class="text-xs font-medium text-gray-500 mb-1">财务状况</p>
               <div class="flex space-x-3 sm:space-x-4">
                 <div>
-                  <p class="text-xs text-green-600">收入</p>
-                  <p class="text-lg sm:text-xl font-bold text-green-600" id="homeMonthlyIncome">¥0.00</p>
+                  <p class="text-xs text-red-600">支出</p>
+                  <p class="text-lg sm:text-xl font-bold text-red-600" id="homeYearlyExpense">¥0.00</p>
                 </div>
                 <div>
-                  <p class="text-xs text-red-600">支出</p>
-                  <p class="text-lg sm:text-xl font-bold text-red-600" id="homeMonthlyExpense">¥0.00</p>
+                  <p class="text-xs text-blue-600">结余</p>
+                  <p class="text-lg sm:text-xl font-bold text-blue-600" id="homeYearlyBalance">¥0.00</p>
                 </div>
               </div>
             </div>
@@ -279,8 +279,8 @@
               <i class="fa fa-book text-purple-600 text-2xl sm:text-3xl"></i>
             </div>
             <div>
-              <p class="text-xs font-medium text-gray-500 mb-1">进行中课程</p>
-              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homeActiveCourses">0门</p>
+              <p class="text-xs font-medium text-gray-500 mb-1">年度学习时长</p>
+              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homeYearlyStudyHours">0小时</p>
             </div>
           </div>
         </div>
@@ -1341,52 +1341,80 @@
     window.StorageHelper = {
       // 数据订阅
       subscriptions: {},
-      
+
       // 同步状态
       isSyncing: false,
 
-      // ★ 数据保护（2026-09-25 修复财务数据自主消失）
-      // 记录"读取失败"的 key。读取失败 ≠ 数据为空，绝不能让空默认值被写回覆盖真实数据。
-      readFailures: new Set(),
-      isReadFailed: function(key) {
-        return this.readFailures.has(key);
-      },
+      // 连接状态缓存（优化：避免每次都诊断）
+      _connectionChecked: false,
+      _isConnected: null,
+
+      // 本地缓存（优化数据库连接）
+      cache: {},
+      cacheTTL: 30000,
+      cacheTimestamp: {},
 
       // 检查 Supabase 是否可用
       isSupabaseAvailable: function() {
         return window.supabaseClient && window.SHARED_DATA_ID;
       },
 
-      // 获取数据（仅从 Supabase）
-      get: async function(key, defaultValue = null) {
+      // 快速检查连接状态（使用缓存）
+      isConnected: function() {
+        return this._isConnected;
+      },
+
+      // 获取数据（仅从 Supabase）- 带缓存优化和超时控制
+      get: async function(key, defaultValue = null, useCache = true, timeoutMs = 10000) {
         if (!this.isSupabaseAvailable()) {
-          this.readFailures.add(key);
-          console.error(`[数据保护] Supabase 不可用，读取 ${key} 失败，已阻止后续覆盖写入`);
           return defaultValue;
         }
+
+        // 检查缓存是否有效
+        if (useCache && this.cache[key] && this.cacheTimestamp[key]) {
+          const age = Date.now() - this.cacheTimestamp[key];
+          if (age < this.cacheTTL) {
+            console.log(`[Cache Hit] ${key} (${Math.round(age/1000)}s ago)`);
+            return this.cache[key];
+          }
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
           const { data, error } = await window.supabaseClient
             .from('shared_data')
             .select('data_value')
             .eq('data_key', key)
             .single();
-          
+
+          clearTimeout(timeoutId);
+
           if (error) {
             if (error.code === 'PGRST116') {
-              // 记录确实不存在（首次使用），属于正常情况
-              this.readFailures.delete(key);
               return defaultValue;
             }
-            this.readFailures.add(key);
             throw error;
           }
 
-          this.readFailures.delete(key);
-          return data ? data.data_value : defaultValue;
+          const result = data ? data.data_value : defaultValue;
+
+          // 更新缓存
+          if (useCache) {
+            this.cache[key] = result;
+            this.cacheTimestamp[key] = Date.now();
+          }
+
+          return result;
         } catch (e) {
-          // ★ 数据保护：读取失败必须显式标记，绝不能静默返回空默认值
-          this.readFailures.add(key);
-          console.error(`[数据保护] 读取 ${key} 失败，已标记并阻止覆盖写入:`, e);
+          clearTimeout(timeoutId);
+          console.error('Error getting data from Supabase:', e);
+          // 缓存失效时返回缓存数据（即使过期）
+          if (this.cache[key]) {
+            console.log(`[Cache Fallback] ${key}`);
+            return this.cache[key];
+          }
           return defaultValue;
         }
       },
@@ -1400,11 +1428,6 @@
       set: async function(key, value) {
         // 自动保存到 Supabase（共享数据）
         if (this.isSupabaseAvailable()) {
-          // ★ 数据保护：该 key 上次读取失败时拒绝写入，防止空数据覆盖真实数据
-          if (this.readFailures.has(key)) {
-            console.error(`[数据保护] 拒绝写入 ${key}：上次读取失败，为防止数据被清空已阻止保存。请检查网络后刷新页面。`);
-            return false;
-          }
           const success = await this.setToSupabase(key, value);
           if (!success) {
             console.warn(`保存 ${key} 到 Supabase 失败`);
@@ -1416,12 +1439,16 @@
         return false;
       },
       
-      // 保存到 Supabase（共享数据）
-      setToSupabase: async function(key, value) {
+      // 保存到 Supabase（共享数据）- 带超时控制
+      setToSupabase: async function(key, value, timeoutMs = 15000) {
         if (!this.isSupabaseAvailable()) {
           console.error('Supabase 客户端不可用');
           return false;
         }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
           console.log(`正在保存 ${key} 到 Supabase...`);
           const { data, error } = await window.supabaseClient
@@ -1434,19 +1461,42 @@
               onConflict: 'data_key'
             })
             .select();
-          
+
+          clearTimeout(timeoutId);
+
           if (error) {
             console.error('Supabase upsert 错误:', error);
             throw error;
           }
-          
+
+          // 更新缓存（保存成功后更新本地缓存）
+          this.cache[key] = value;
+          this.cacheTimestamp[key] = Date.now();
+
           console.log(`成功保存 ${key} 到 Supabase:`, data);
           return true;
         } catch (e) {
+          clearTimeout(timeoutId);
           console.error('Error saving data to Supabase:', e);
           console.error('错误详情:', e.message, e.code);
           return false;
         }
+      },
+
+      // 清除指定key的缓存
+      clearCache: function(key) {
+        if (key && this.cache[key]) {
+          delete this.cache[key];
+          delete this.cacheTimestamp[key];
+          console.log(`[Cache Cleared] ${key}`);
+        }
+      },
+
+      // 清除所有缓存
+      clearAllCache: function() {
+        this.cache = {};
+        this.cacheTimestamp = {};
+        console.log('[Cache Cleared] All');
       },
 
       // 删除数据（仅从 Supabase）
@@ -1551,52 +1601,33 @@
         return true;
       },
       
-      // 启动时的轻量连通性检查（纯只读，不产生任何写入）
-      // 2026-09-26 优化：此前每次打开页面都会跑完整 diagnose()，往数据表写入一条
-      // test_connection 记录，属于启动时的多余写操作。
-      quickCheck: async function() {
-        if (!this.isSupabaseAvailable()) {
-          console.error('❌ Supabase 客户端未初始化');
-          return false;
+      // 诊断 Supabase 连接和表状态（优化：不执行写入操作 + 连接状态缓存）
+      diagnose: async function(force = false) {
+        // 如果已经诊断过，直接返回缓存结果
+        if (this._connectionChecked && !force) {
+          console.log('[Connection Cache] Using cached connection status:', this._isConnected);
+          return this._isConnected;
         }
-        try {
-          // head:true + count:'exact'：只取行数，不传输任何数据
-          const { count, error } = await window.supabaseClient
-            .from('shared_data')
-            .select('data_key', { head: true, count: 'exact' });
 
-          if (error) {
-            console.error('❌ shared_data 表访问失败:', error.message, '(', error.code, ')');
-            return false;
-          }
-          console.log(`✅ 云端连接正常（可读 ${count} 条记录）`);
-          return true;
-        } catch (e) {
-          console.error('❌ 连通性检查出错:', e);
-          return false;
-        }
-      },
-
-      // 完整诊断（含写权限测试）—— 仅在排查问题时于控制台手动执行：
-      //   await StorageHelper.diagnose()
-      diagnose: async function() {
         console.log('========== Supabase 诊断开始 ==========');
-        
+
         // 1. 检查 Supabase 客户端
         if (!window.supabaseClient) {
           console.error('❌ Supabase 客户端未初始化');
+          this._isConnected = false;
+          this._connectionChecked = true;
           return false;
         }
         console.log('✅ Supabase 客户端已初始化');
         console.log('Supabase URL:', window.supabaseClient.supabaseUrl);
-        
-        // 2. 检查 shared_data 表是否存在
+
+        // 2. 检查 shared_data 表是否存在（只读检查，无需写入）
         try {
-          // head:true 只读取行数，不传输数据
-          const { count, error } = await window.supabaseClient
+          const { data, error } = await window.supabaseClient
             .from('shared_data')
-            .select('data_key', { head: true, count: 'exact' });
-          
+            .select('data_key')
+            .limit(1);
+
           if (error) {
             console.error('❌ shared_data 表访问失败:', error.message);
             console.error('错误代码:', error.code);
@@ -1612,49 +1643,21 @@ CREATE TABLE IF NOT EXISTS shared_data (
 
 CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             `);
+            this._isConnected = false;
+            this._connectionChecked = true;
             return false;
           }
           console.log('✅ shared_data 表可访问');
         } catch (e) {
           console.error('❌ 检查表时出错:', e);
-          return false;
-        }
-        
-        // 3. 测试写入权限（使用临时 key，测完立即删除，不再往表里留垃圾数据）
-        const tempKey = '__connection_test__';
-        try {
-          const testData = { test: true, timestamp: new Date().toISOString() };
-          const { data, error } = await window.supabaseClient
-            .from('shared_data')
-            .upsert({
-              data_key: tempKey,
-              data_value: testData,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'data_key' })
-            .select();
-          
-          if (error) {
-            console.error('❌ 测试写入失败:', error.message);
-            console.error('这可能是权限问题，请检查 RLS 策略');
-            return false;
-          }
-          console.log('✅ 写权限正常:', data);
-        } catch (e) {
-          console.error('❌ 测试写入时出错:', e);
+          this._isConnected = false;
+          this._connectionChecked = true;
           return false;
         }
 
-        // 4. 清理测试记录：本次临时记录 + 历史遗留的 test_connection
-        try {
-          await window.supabaseClient.from('shared_data').delete().eq('data_key', tempKey);
-          const { error: delErr } = await window.supabaseClient
-            .from('shared_data').delete().eq('data_key', 'test_connection');
-          if (!delErr) console.log('🧹 测试记录已清理（含历史遗留的 test_connection）');
-        } catch (e) {
-          console.warn('清理测试记录失败（不影响正常使用）:', e);
-        }
-        
         console.log('========== Supabase 诊断完成 ==========');
+        this._isConnected = true;
+        this._connectionChecked = true;
         return true;
       },
 
@@ -1691,7 +1694,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       },
 
       // 导入数据
-      importData: async function(jsonData) {
+      importData: function(jsonData) {
         try {
           const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
           
@@ -1707,18 +1710,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           }
           
           // 数据冲突解决
-          await this.resolveConflicts(data.data);
-
-          // ★ 修复：保存是异步的，必须等待真正写入完成再返回成功。
-          //   原代码不 await，用户点完导入立刻刷新会拿到"看起来成功但没写完"的结果。
+          this.resolveConflicts(data.data);
+          
+          // 保存数据
           if (data.data.familyFinanceData) {
-            await this.set('familyFinanceData', data.data.familyFinanceData);
+            this.set('familyFinanceData', data.data.familyFinanceData);
           }
           if (data.data.studyData) {
-            await this.set('studyData', data.data.studyData);
+            this.set('studyData', data.data.studyData);
           }
           if (data.data.houseworkData) {
-            await this.set('houseworkData', data.data.houseworkData);
+            this.set('houseworkData', data.data.houseworkData);
           }
           
           return true;
@@ -1729,37 +1731,21 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       },
 
       // 解决数据冲突
-      resolveConflicts: async function(importedData) {
+      resolveConflicts: function(importedData) {
         try {
-          // ★ 修复：this.get() 是异步函数，原代码漏了 await，currentData 里装的其实是 Promise，
-          //   会多发 3 次无用查询且拿到的东西无法使用。
+          // 获取当前存储的数据
           const currentData = {
-            familyFinanceData: await this.get('familyFinanceData', {}),
-            studyData: await this.get('studyData', {}),
-            houseworkData: await this.get('houseworkData', {})
+            familyFinanceData: this.get('familyFinanceData', {}),
+            studyData: this.get('studyData', {}),
+            houseworkData: this.get('houseworkData', {})
           };
-
-          // 导入前给出可读的状态摘要：便于确认这次导入是在"恢复"还是"覆盖"
-          const summary = ['familyFinanceData', 'studyData', 'houseworkData'].map((k) => {
-            const cur = currentData[k];
-            const imp = importedData[k];
-            const curEmpty = !cur || Object.keys(cur).length === 0;
-            const impHas = imp && Object.keys(imp).length > 0;
-            let tag = '';
-            if (curEmpty && impHas) tag = '（云端为空，将用导入数据恢复）';
-            else if (curEmpty && !impHas) tag = '（云端为空且无导入数据）';
-            else tag = '（云端已有数据，将被导入数据覆盖）';
-            return `${k}: ${tag}`;
-          });
-          console.log('导入前云端状态 -\n  ' + summary.join('\n  '));
-
+          
           // 这里可以添加更复杂的冲突解决逻辑
           // 例如，基于时间戳的合并、用户选择等
-
-          return true;
+          
+          console.log('Data conflict resolution completed');
         } catch (e) {
           console.error('Error resolving conflicts:', e);
-          return false;
         }
       }
     };
@@ -2005,7 +1991,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const appData = {
         transactions: [],
         budgets: {
-          // 按月份存储预算，键格式为YYYY-MM
           monthly: {
             total: 0,
             categories: {}
@@ -2018,9 +2003,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         categories: {
           income: [
             { id: 'salary', name: '工资', icon: 'fa-money', color: '#10b981' },
-            // { id: 'bonus', name: '奖金', icon: 'fa-gift', color: '#3b82f6' },
-            // { id: 'investment', name: '投资收益', icon: 'fa-line-chart', color: '#8b5cf6' },
-            // { id: 'parttime', name: '兼职', icon: 'fa-briefcase', color: '#f59e0b' },
             { id: 'other_income', name: '其他收入', icon: 'fa-plus-circle', color: '#6b7280' }
           ],
           expense: [
@@ -2040,14 +2022,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           currency: 'CNY',
           dateFormat: 'YYYY-MM-DD',
           theme: 'light'
+        },
+        _cache: {
+          transactionsByDateRange: {},
+          totals: {},
+          lastUpdate: null
         }
       };
 
 
-
-      // ★ 数据保护（2026-09-25）：只有在云端数据成功加载后才允许写回。
-      // 防止"读取失败 → 内存为空 → 自动保存"把云端真实数据清空。
-      let financeDataReady = false;
 
       // 从云存储加载数据
       async function loadData() {
@@ -2057,32 +2040,22 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           settings: appData.settings
         });
 
-        // ★ 关键保护：若本次读取失败，绝不能用空默认值覆盖内存数据并触发保存
-        if (StorageHelper.isReadFailed('familyFinanceData')) {
-          console.error('⚠️ 财务数据读取失败，已中止加载并禁止保存。请检查网络后刷新页面。');
-          return false;
-        }
-
         // 确保数据结构的完整性
         appData.transactions = Array.isArray(savedData.transactions) ? savedData.transactions : [];
         appData.budgets = savedData.budgets || appData.budgets;
         appData.settings = savedData.settings || appData.settings;
-        financeDataReady = true;
+
+        // 清除旧缓存（因为刚从云端加载了新数据）
+        clearTransactionCache();
 
         // 初始化月份选择器
         initMonthSelector();
         // 初始化编辑预算界面的月份选择器
         initEditBudgetMonthSelector();
-        return true;
       }
 
       // 保存数据到云存储
       async function saveData() {
-        // ★ 关键保护：数据未成功加载时拒绝保存，防止空数据覆盖云端
-        if (!financeDataReady) {
-          console.warn('⚠️ 财务数据尚未成功加载，已阻止保存以防覆盖云端数据。');
-          return false;
-        }
         const result = await AppHelper.saveData('familyFinanceData', {
           transactions: appData.transactions,
           budgets: appData.budgets,
@@ -2294,19 +2267,22 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       async function addTransaction(transaction) {
         // 生成唯一ID
         transaction.id = generateId(transaction.type);
-        
+
         // 添加到交易列表
         appData.transactions.push(transaction);
-        
+
+        // 清除缓存
+        clearTransactionCache();
+
         // 保存数据
         await saveData();
-        
+
         // 更新UI
         updateDashboard();
         updateTransactionTable();
         updateBudgetPage();
         updateAnalysisCharts();
-        
+
         return transaction;
       }
 
@@ -2364,6 +2340,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const index = appData.transactions.findIndex(t => t.id === id);
         if (index !== -1) {
           appData.transactions.splice(index, 1);
+          clearTransactionCache();
           await saveData();
           updateDashboard();
           updateTransactionTable();
@@ -2377,12 +2354,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 批量删除交易记录
       async function deleteSelectedTransactions(ids) {
         appData.transactions = appData.transactions.filter(t => !ids.includes(t.id));
+        clearTransactionCache();
         await saveData();
         updateDashboard();
         updateTransactionTable();
         updateBudgetPage();
         updateAnalysisCharts();
-        
         // 删除完成后取消所有复选框的勾选状态
         const checkboxes = document.querySelectorAll('.transaction-checkbox');
         checkboxes.forEach(checkbox => {
@@ -2399,12 +2376,39 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         updateDeleteSelectedButton();
       }
 
-      // 获取指定日期范围内的交易
+      // 获取指定日期范围内的交易（带缓存优化）
       function getTransactionsByDateRange(startDate, endDate) {
-        return appData.transactions.filter(transaction => {
+        const startKey = startDate.toISOString();
+        const endKey = endDate.toISOString();
+        const cacheKey = `${startKey}_${endKey}`;
+
+        // 计算数据版本号（用于检测数据变化）
+        const dataVersion = appData.transactions.length;
+
+        // 检查缓存是否存在且有效
+        if (appData._cache.transactionsByDateRange[cacheKey] &&
+            appData._cache.lastUpdate === dataVersion) {
+          return appData._cache.transactionsByDateRange[cacheKey];
+        }
+
+        const result = appData.transactions.filter(transaction => {
           const transactionDate = new Date(transaction.date);
           return transactionDate >= startDate && transactionDate <= endDate;
         });
+
+        // 更新缓存
+        appData._cache.transactionsByDateRange[cacheKey] = result;
+        appData._cache.lastUpdate = dataVersion;
+
+        return result;
+      }
+
+      // 清除交易缓存
+      function clearTransactionCache() {
+        appData._cache.transactionsByDateRange = {};
+        appData._cache.totals = {};
+        appData._cache.lastUpdate = null;
+        console.log('[Transaction Cache Cleared]');
       }
 
       // 获取当前月份的交易
@@ -2481,12 +2485,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const lastMonthTransactions = getLastMonthTransactions();
         const todayTransactions = getTodayTransactions();
         const yesterdayTransactions = getYesterdayTransactions();
-        
+        const currentYearTransactions = getCurrentYearTransactions();
+
         // 计算本月收支
         const monthlyIncome = calculateTotalIncome(currentMonthTransactions);
         const monthlyExpense = calculateTotalExpense(currentMonthTransactions);
         const monthlyBalance = monthlyIncome - monthlyExpense;
-        
+
+        // 计算本年收支
+        const yearlyIncome = calculateTotalIncome(currentYearTransactions);
+        const yearlyExpense = calculateTotalExpense(currentYearTransactions);
+        const yearlyBalance = yearlyIncome - yearlyExpense;
+
         // 计算上月收支
         const lastMonthIncome = calculateTotalIncome(lastMonthTransactions);
         const lastMonthExpense = calculateTotalExpense(lastMonthTransactions);
@@ -2512,11 +2522,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 更新UI - 数据看板
         document.getElementById('monthlyIncome').textContent = `¥${monthlyIncome.toFixed(2)}`;
         document.getElementById('monthlyExpense').textContent = `¥${monthlyExpense.toFixed(2)}`;
-        
-        // 更新UI - 首页
-        document.getElementById('homeMonthlyIncome').textContent = `¥${monthlyIncome.toFixed(2)}`;
-        document.getElementById('homeMonthlyExpense').textContent = `¥${monthlyExpense.toFixed(2)}`;
-        
+
+        // 更新UI - 首页（财务状况）
+        document.getElementById('homeYearlyExpense').textContent = `¥${yearlyExpense.toFixed(2)}`;
+        document.getElementById('homeYearlyBalance').textContent = `¥${yearlyBalance.toFixed(2)}`;
+
         // 更新今日收支UI
         document.getElementById('todayIncome').textContent = `¥${todayIncome.toFixed(2)}`;
         document.getElementById('todayExpense').textContent = `¥${todayExpense.toFixed(2)}`;
@@ -2580,9 +2590,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 更新最近交易记录
         updateRecentTransactions();
 
-        // 更新首页的进行中课程数量
-        const activeCourses = studyData.courses.filter(c => c.status === 'active');
-        document.getElementById('homeActiveCourses').textContent = `${activeCourses.length}门`;
+        // 更新首页的年度学习时长
+        const currentYear = new Date().getFullYear();
+        const yearlyStudyRecords = studyData.records.filter(r => {
+          if (!r.date) return false;
+          return parseInt(r.date.substring(0, 4)) === currentYear;
+        });
+        const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+        const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
+        document.getElementById('homeYearlyStudyHours').textContent = `${yearlyStudyHours}小时`;
 
         // 更新首页的待办家务数量（排除逾期）
       const today = new Date();
@@ -4025,35 +4041,20 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       // 初始化应用
       async function initApp() {
-        // 启动时只做只读连通性检查（不写库）。
-        // 需要排查问题时，在控制台手动执行：await StorageHelper.diagnose()
-        console.log('正在检查云端连接...');
-        const isConnected = await StorageHelper.quickCheck();
+        // 并行执行诊断和数据加载（优化：减少等待时间）
+        console.log('正在初始化应用...');
+
+        const [isConnected] = await Promise.all([
+          StorageHelper.diagnose().catch(() => false),
+          loadData()
+        ]);
+
         if (!isConnected) {
           console.warn('⚠️ Supabase 连接异常，数据将无法保存到云端');
-        }
-        
-        // 加载数据
-        const loadOk = await loadData();
-        if (!loadOk) {
-          console.error('⚠️ 财务数据未成功加载，初始化中止，本次会话不会写入任何财务数据。');
+        } else {
+          console.log('✅ Supabase 连接正常');
         }
 
-        // ★ 数据保护：监听其他标签页/设备的数据变更。
-        // 此前 realtime 只发不收，导致旧标签页会用陈旧内存数据回写，覆盖其他端的新记录。
-        window.addEventListener('dataUpdated', (e) => {
-          const d = e && e.detail;
-          if (!d || d.key !== 'familyFinanceData') return;
-          if (!financeDataReady) return;
-          if (!d.data || !Array.isArray(d.data.transactions)) return;
-          // 自己保存触发的回环：内容一致则忽略
-          if (JSON.stringify(d.data.transactions) === JSON.stringify(appData.transactions)) return;
-          console.log('[数据保护] 检测到其他端财务数据更新，已同步到本地内存');
-          appData.transactions = d.data.transactions;
-          if (d.data.budgets) appData.budgets = d.data.budgets;
-          if (d.data.settings) appData.settings = d.data.settings;
-        });
-        
         // 初始化分类选择器
         initCategorySelectors();
         
@@ -4629,14 +4630,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 '导入数据',
                 '导入数据将覆盖当前系统所有模块的数据，您确定要继续吗？',
                 async () => {
-                  // ★ 修复：importData 已改为异步，必须 await。
-                  //   否则 success 是 Promise（永远为真），导入失败也会提示"成功"并刷新。
-                  const success = await StorageHelper.importData(importedData);
+                  const success = StorageHelper.importData(importedData);
                   if (success) {
                     showNotification('导入成功', '系统数据已更新。');
                     setTimeout(() => {
                       window.location.reload();
-                    }, 1500);
+                    }, 800);
                   } else {
                     showNotification('导入失败', '导入数据解析失败。', 'error');
                   }
@@ -5892,8 +5891,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <i class="fa fa-clock-o text-blue-600 text-lg sm:text-xl"></i>
               </div>
               <div>
-                <p class="text-xs sm:text-sm text-gray-500">本周学习时间</p>
-                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="weeklyStudyTime">0小时</p>
+                <p class="text-xs sm:text-sm text-gray-500">年度学习时长</p>
+                <p class="text-lg sm:text-2xl font-bold text-gray-800" id="yearlyStudyTime">0小时</p>
               </div>
             </div>
           </div>
@@ -6889,11 +6888,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       renderStudyRecords();
       initStudyCharts();
 
-      // 更新首页的进行中课程数量
-      const activeCourses = studyData.courses.filter(c => c.status === 'active');
-      const homeActiveCourses = document.getElementById('homeActiveCourses');
-      if (homeActiveCourses) {
-        homeActiveCourses.textContent = `${activeCourses.length}门`;
+      // 更新首页的年度学习时长
+      const currentYear = new Date().getFullYear();
+      const yearlyStudyRecords = studyData.records.filter(r => {
+        if (!r.date) return false;
+        return parseInt(r.date.substring(0, 4)) === currentYear;
+      });
+      const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+      const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
+      const homeYearlyStudyHours = document.getElementById('homeYearlyStudyHours');
+      if (homeYearlyStudyHours) {
+        homeYearlyStudyHours.textContent = `${yearlyStudyHours}小时`;
       }
 
       // 更新首页的待办家务数量（排除逾期）
@@ -7036,8 +7041,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
       document.getElementById('importStudyDataInput')?.addEventListener('change', importStudyData);
 
-      // 初始化日期选择器
-      document.getElementById('recordDate').valueAsDate = new Date();
+      // 初始化日期选择器为今天
+      const today = new Date();
+      document.getElementById('recordDate').value = today.toISOString().split('T')[0];
 
       // 初始化开始时间为当前时间，结束时间为当前时间+1小时
       const now = new Date();
@@ -8543,10 +8549,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 进行中课程
       const activeCourses = studyData.courses.filter(c => c.status === 'active');
       document.getElementById('activeCoursesCount').textContent = `${activeCourses.length}门`;
-      // 同时更新首页的进行中课程数量
-      const homeActiveCourses = document.getElementById('homeActiveCourses');
-      if (homeActiveCourses) {
-        homeActiveCourses.textContent = `${activeCourses.length}门`;
+      // 同时更新首页的年度学习时长
+      const currentYear = new Date().getFullYear();
+      const yearlyStudyRecords = studyData.records.filter(r => {
+        if (!r.date) return false;
+        return parseInt(r.date.substring(0, 4)) === currentYear;
+      });
+      const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+      const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
+      const homeYearlyStudyHours = document.getElementById('homeYearlyStudyHours');
+      if (homeYearlyStudyHours) {
+        homeYearlyStudyHours.textContent = `${yearlyStudyHours}小时`;
       }
 
       // 同时更新首页的待办家务数量（排除逾期）
@@ -8564,18 +8577,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const completedCourses = studyData.courses.filter(c => c.status === 'completed');
       document.getElementById('completedCoursesCount').textContent = `${completedCourses.length}门`;
 
-      // 本周学习时间 - 统一使用本周计算逻辑
-      const now = new Date();
-      const weekStart = getWeekStart(now);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-
-      const weeklyRecords = studyData.records.filter(r => {
-        const recordDate = new Date(r.date);
-        return recordDate >= weekStart && recordDate < weekEnd;
-      });
-      const weeklyMinutes = weeklyRecords.reduce((sum, r) => sum + r.duration, 0);
-      document.getElementById('weeklyStudyTime').textContent = `${(weeklyMinutes / 60).toFixed(1)}小时`;
+      // 年度学习时长
+      document.getElementById('yearlyStudyTime').textContent = `${yearlyStudyHours}小时`;
 
       // 连续学习天数
       const streak = calculateStudyStreak();
@@ -9117,7 +9120,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       // 重置表单
       document.getElementById('addStudyRecordForm').reset();
-      document.getElementById('recordDate').valueAsDate = new Date();
+      // 重新设置日期为今天
+      const today = new Date();
+      document.getElementById('recordDate').value = today.toISOString().split('T')[0];
 
       // 重新设置默认时间（开始时间为当前时间，结束时间为当前时间+1小时）
       const now = new Date();
@@ -9841,22 +9846,38 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       
       // 计算连续学习天数
       let streak = 0;
-      let hasBreak = false;
       const streakDots = document.getElementById('streakDots');
       
+      // 获取所有有学习记录的日期（去重并排序）
+      const uniqueDates = [...new Set(studyData.records.map(r => r.date))].sort().reverse();
+      if (uniqueDates.length > 0) {
+        let currentDate = new Date();
+        currentDate.setHours(0, 0, 0, 0);
+        
+        for (let i = 0; i < uniqueDates.length; i++) {
+          const recordDate = new Date(uniqueDates[i]);
+          recordDate.setHours(0, 0, 0, 0);
+          const diffDays = Math.floor((currentDate - recordDate) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays === i) {
+            streak++;
+          } else if (i === 0 && diffDays === 1) {
+            // 今天还没学习，但昨天学了
+            currentDate = recordDate;
+            streak++;
+          } else {
+            break;
+          }
+        }
+      }
+      
+      // 更新打卡圆点
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
         const dateStr = date.toISOString().split('T')[0];
         const dayRecords = studyData.records.filter(r => r.date === dateStr);
         const hasStudy = dayRecords.length > 0 && dayRecords.reduce((sum, r) => sum + r.duration, 0) > 0;
         
-        if (hasStudy && !hasBreak) {
-          streak++;
-        } else if (!hasStudy) {
-          hasBreak = true;
-        }
-        
-        // 更新打卡圆点
         if (streakDots && streakDots.children[days - 1 - i]) {
           const dot = streakDots.children[days - 1 - i];
           if (hasStudy) {
@@ -9966,7 +9987,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     function updateStudyCharts() {
       updateStudyTimeChart(7);
-      
+
       if (todayStudyChart) {
         const today = new Date().toISOString().split('T')[0];
         const courseColors = [
@@ -9979,11 +10000,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           { bg: 'rgba(14, 165, 233, 0.9)', border: '#0ea5e9', gradient: ['#38bdf8', '#0ea5e9'] },
           { bg: 'rgba(249, 115, 22, 0.9)', border: '#f97316', gradient: ['#fb923c', '#f97316'] }
         ];
-        
+
         // 获取今日有学习记录的课程
         const todayRecords = studyData.records.filter(r => r.date === today);
         const courseIdsWithRecords = [...new Set(todayRecords.map(r => r.courseId))];
-        
+
         // 计算今日每门课程的学习时长（分钟）
         const todayCourseDurations = courseIdsWithRecords.map(courseId => {
           const course = studyData.courses.find(c => c.id === courseId);
@@ -9991,11 +10012,23 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           const duration = courseRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
           return { course, duration, courseId };
         }).filter(item => item.course);
-        
+
+        // 重新创建渐变色
+        const todayStudyCtx = document.getElementById('todayStudyChart')?.getContext('2d');
+        const gradients = courseColors.slice(0, todayCourseDurations.length).map((color) => {
+          if (!todayStudyCtx) return color.bg;
+          const gradient = todayStudyCtx.createLinearGradient(0, 0, 0, 200);
+          gradient.addColorStop(0, color.gradient[0]);
+          gradient.addColorStop(1, color.gradient[1]);
+          return gradient;
+        });
+
         todayStudyChart.data.labels = todayCourseDurations.map(item => item.course.name.length > 6 ? item.course.name.substring(0, 6) + '...' : item.course.name);
         todayStudyChart.data.datasets[0].data = todayCourseDurations.map(item => item.duration);
+        todayStudyChart.data.datasets[0].backgroundColor = gradients;
+        todayStudyChart.data.datasets[0].borderColor = courseColors.slice(0, todayCourseDurations.length).map(c => c.border);
         todayStudyChart.update('active');
-        
+
         // 更新详情列表
         updateTodayStudyDetails(todayCourseDurations, courseColors);
       }
