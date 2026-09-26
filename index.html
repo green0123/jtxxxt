@@ -1551,7 +1551,34 @@
         return true;
       },
       
-      // 诊断 Supabase 连接和表状态
+      // 启动时的轻量连通性检查（纯只读，不产生任何写入）
+      // 2026-09-26 优化：此前每次打开页面都会跑完整 diagnose()，往数据表写入一条
+      // test_connection 记录，属于启动时的多余写操作。
+      quickCheck: async function() {
+        if (!this.isSupabaseAvailable()) {
+          console.error('❌ Supabase 客户端未初始化');
+          return false;
+        }
+        try {
+          // head:true + count:'exact'：只取行数，不传输任何数据
+          const { count, error } = await window.supabaseClient
+            .from('shared_data')
+            .select('data_key', { head: true, count: 'exact' });
+
+          if (error) {
+            console.error('❌ shared_data 表访问失败:', error.message, '(', error.code, ')');
+            return false;
+          }
+          console.log(`✅ 云端连接正常（可读 ${count} 条记录）`);
+          return true;
+        } catch (e) {
+          console.error('❌ 连通性检查出错:', e);
+          return false;
+        }
+      },
+
+      // 完整诊断（含写权限测试）—— 仅在排查问题时于控制台手动执行：
+      //   await StorageHelper.diagnose()
       diagnose: async function() {
         console.log('========== Supabase 诊断开始 ==========');
         
@@ -1565,10 +1592,10 @@
         
         // 2. 检查 shared_data 表是否存在
         try {
-          const { data, error } = await window.supabaseClient
+          // head:true 只读取行数，不传输数据
+          const { count, error } = await window.supabaseClient
             .from('shared_data')
-            .select('count')
-            .limit(1);
+            .select('data_key', { head: true, count: 'exact' });
           
           if (error) {
             console.error('❌ shared_data 表访问失败:', error.message);
@@ -1593,16 +1620,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           return false;
         }
         
-        // 3. 测试写入数据
+        // 3. 测试写入权限（使用临时 key，测完立即删除，不再往表里留垃圾数据）
+        const tempKey = '__connection_test__';
         try {
           const testData = { test: true, timestamp: new Date().toISOString() };
           const { data, error } = await window.supabaseClient
             .from('shared_data')
             .upsert({
-              data_key: 'test_connection',
+              data_key: tempKey,
               data_value: testData,
               updated_at: new Date().toISOString()
-            })
+            }, { onConflict: 'data_key' })
             .select();
           
           if (error) {
@@ -1610,10 +1638,20 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             console.error('这可能是权限问题，请检查 RLS 策略');
             return false;
           }
-          console.log('✅ 测试写入成功:', data);
+          console.log('✅ 写权限正常:', data);
         } catch (e) {
           console.error('❌ 测试写入时出错:', e);
           return false;
+        }
+
+        // 4. 清理测试记录：本次临时记录 + 历史遗留的 test_connection
+        try {
+          await window.supabaseClient.from('shared_data').delete().eq('data_key', tempKey);
+          const { error: delErr } = await window.supabaseClient
+            .from('shared_data').delete().eq('data_key', 'test_connection');
+          if (!delErr) console.log('🧹 测试记录已清理（含历史遗留的 test_connection）');
+        } catch (e) {
+          console.warn('清理测试记录失败（不影响正常使用）:', e);
         }
         
         console.log('========== Supabase 诊断完成 ==========');
@@ -1653,7 +1691,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       },
 
       // 导入数据
-      importData: function(jsonData) {
+      importData: async function(jsonData) {
         try {
           const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
           
@@ -1669,17 +1707,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           }
           
           // 数据冲突解决
-          this.resolveConflicts(data.data);
-          
-          // 保存数据
+          await this.resolveConflicts(data.data);
+
+          // ★ 修复：保存是异步的，必须等待真正写入完成再返回成功。
+          //   原代码不 await，用户点完导入立刻刷新会拿到"看起来成功但没写完"的结果。
           if (data.data.familyFinanceData) {
-            this.set('familyFinanceData', data.data.familyFinanceData);
+            await this.set('familyFinanceData', data.data.familyFinanceData);
           }
           if (data.data.studyData) {
-            this.set('studyData', data.data.studyData);
+            await this.set('studyData', data.data.studyData);
           }
           if (data.data.houseworkData) {
-            this.set('houseworkData', data.data.houseworkData);
+            await this.set('houseworkData', data.data.houseworkData);
           }
           
           return true;
@@ -1690,21 +1729,37 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       },
 
       // 解决数据冲突
-      resolveConflicts: function(importedData) {
+      resolveConflicts: async function(importedData) {
         try {
-          // 获取当前存储的数据
+          // ★ 修复：this.get() 是异步函数，原代码漏了 await，currentData 里装的其实是 Promise，
+          //   会多发 3 次无用查询且拿到的东西无法使用。
           const currentData = {
-            familyFinanceData: this.get('familyFinanceData', {}),
-            studyData: this.get('studyData', {}),
-            houseworkData: this.get('houseworkData', {})
+            familyFinanceData: await this.get('familyFinanceData', {}),
+            studyData: await this.get('studyData', {}),
+            houseworkData: await this.get('houseworkData', {})
           };
-          
+
+          // 导入前给出可读的状态摘要：便于确认这次导入是在"恢复"还是"覆盖"
+          const summary = ['familyFinanceData', 'studyData', 'houseworkData'].map((k) => {
+            const cur = currentData[k];
+            const imp = importedData[k];
+            const curEmpty = !cur || Object.keys(cur).length === 0;
+            const impHas = imp && Object.keys(imp).length > 0;
+            let tag = '';
+            if (curEmpty && impHas) tag = '（云端为空，将用导入数据恢复）';
+            else if (curEmpty && !impHas) tag = '（云端为空且无导入数据）';
+            else tag = '（云端已有数据，将被导入数据覆盖）';
+            return `${k}: ${tag}`;
+          });
+          console.log('导入前云端状态 -\n  ' + summary.join('\n  '));
+
           // 这里可以添加更复杂的冲突解决逻辑
           // 例如，基于时间戳的合并、用户选择等
-          
-          console.log('Data conflict resolution completed');
+
+          return true;
         } catch (e) {
           console.error('Error resolving conflicts:', e);
+          return false;
         }
       }
     };
@@ -3970,13 +4025,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       // 初始化应用
       async function initApp() {
-        // 运行 Supabase 诊断（仅输出到控制台）
-        console.log('正在运行 Supabase 诊断...');
-        const isConnected = await StorageHelper.diagnose();
+        // 启动时只做只读连通性检查（不写库）。
+        // 需要排查问题时，在控制台手动执行：await StorageHelper.diagnose()
+        console.log('正在检查云端连接...');
+        const isConnected = await StorageHelper.quickCheck();
         if (!isConnected) {
           console.warn('⚠️ Supabase 连接异常，数据将无法保存到云端');
-        } else {
-          console.log('✅ Supabase 连接正常');
         }
         
         // 加载数据
@@ -4575,12 +4629,14 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 '导入数据',
                 '导入数据将覆盖当前系统所有模块的数据，您确定要继续吗？',
                 async () => {
-                  const success = StorageHelper.importData(importedData);
+                  // ★ 修复：importData 已改为异步，必须 await。
+                  //   否则 success 是 Promise（永远为真），导入失败也会提示"成功"并刷新。
+                  const success = await StorageHelper.importData(importedData);
                   if (success) {
                     showNotification('导入成功', '系统数据已更新。');
                     setTimeout(() => {
                       window.location.reload();
-                    }, 800);
+                    }, 1500);
                   } else {
                     showNotification('导入失败', '导入数据解析失败。', 'error');
                   }
