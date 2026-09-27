@@ -1981,7 +1981,30 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         });
 
         // 确保数据结构的完整性
-        appData.transactions = Array.isArray(savedData.transactions) ? savedData.transactions : [];
+        // 【容错修复】过滤脏数据：任何一条金额/日期/类型异常的记录都会让 toFixed() 等渲染逻辑抛异常，
+        // 导致整个看板挂掉。加载时统一校验并丢弃（控制台留痕），保证内存里永远是干净数据。
+        const rawTransactions = Array.isArray(savedData.transactions) ? savedData.transactions : [];
+        appData.transactions = rawTransactions.filter(function(t) {
+          const valid = t && typeof t === 'object'
+            && (t.type === 'income' || t.type === 'expense')
+            && typeof t.amount === 'number' && isFinite(t.amount) && t.amount > 0
+            && typeof t.date === 'string' && !isNaN(new Date(t.date).getTime());
+          if (!valid) console.warn('[数据校验] 丢弃异常交易记录:', t);
+          return valid;
+        }).map(function(t) {
+          return {
+            id: t.id,
+            type: t.type,
+            amount: t.amount,
+            category: t.category,
+            date: t.date,
+            description: typeof t.description === 'string' ? t.description : '',
+            budgetExceedReason: typeof t.budgetExceedReason === 'string' ? t.budgetExceedReason : undefined
+          };
+        });
+        if (rawTransactions.length !== appData.transactions.length) {
+          console.warn(`[数据校验] 共 ${rawTransactions.length - appData.transactions.length} 条异常记录被过滤`);
+        }
         appData.budgets = savedData.budgets || appData.budgets;
         appData.settings = savedData.settings || appData.settings;
 
@@ -2011,26 +2034,29 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
 
       // 获取当前月份的开始和结束日期
+      // 【边界修复】end 必须到「最后一天 23:59:59.999」。
+      // 原实现是最后一天 00:00，而 "YYYY-MM-DD" 日期串按 UTC 零点解析（本地 +8 小时），
+      // 导致每月最后一天的交易全部被排除在月度统计之外。
       function getCurrentMonthRange() {
         const today = new Date();
         const start = new Date(today.getFullYear(), today.getMonth(), 1);
-        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
         return { start, end };
       }
 
-      // 获取上一个月份的开始和结束日期
+      // 获取上一个月份的开始和结束日期（同样修复月末边界）
       function getLastMonthRange() {
         const today = new Date();
         const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const end = new Date(today.getFullYear(), today.getMonth(), 0);
+        const end = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
         return { start, end };
       }
 
-      // 获取当前年份的开始和结束日期
+      // 获取当前年份的开始和结束日期（同样修复年末边界）
       function getCurrentYearRange() {
         const today = new Date();
         const start = new Date(today.getFullYear(), 0, 1);
-        const end = new Date(today.getFullYear(), 11, 31);
+        const end = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
         return { start, end };
       }
 
@@ -2204,6 +2230,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
 
       // 添加交易记录
+      // 【数据安全修复】把保存结果返回给调用方；保存失败时回滚内存数据，
+      // 避免「页面显示成功、刷新后记录消失」的错觉。
       async function addTransaction(transaction) {
         // 生成唯一ID
         transaction.id = generateId(transaction.type);
@@ -2215,7 +2243,14 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         clearTransactionCache();
 
         // 保存数据
-        await saveData();
+        const saved = await saveData();
+
+        if (!saved) {
+          // 保存失败：回滚内存中的这条记录，让页面与云端保持一致
+          const idx = appData.transactions.indexOf(transaction);
+          if (idx !== -1) appData.transactions.splice(idx, 1);
+          clearTransactionCache();
+        }
 
         // 更新UI
         updateDashboard();
@@ -2223,7 +2258,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         updateBudgetPage();
         updateAnalysisCharts();
 
-        return transaction;
+        return saved;
       }
 
       // 检查支出是否超出预算
@@ -2247,9 +2282,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           return { isExceeded: false, remaining: categoryBudget };
         }
         
-        // 获取当前月份该类别的支出
-        const currentMonthTransactions = getCurrentMonthTransactions();
-        const categoryExpenses = groupTransactionsByCategory(currentMonthTransactions, 'expense');
+        // 获取「该笔交易所属月份」该类别的支出
+        // 【口径修复】原实现固定取当前自然月的交易，补记账（选择非本月日期）时会拿本月的已花金额来比较，结果错乱。
+        const [checkYear, checkMonth] = currentMonth.split('-').map(Number);
+        const monthStart = new Date(checkYear, checkMonth - 1, 1);
+        const monthEnd = new Date(checkYear, checkMonth, 0, 23, 59, 59, 999);
+        const monthTransactions = appData.transactions.filter(function(t) {
+          if (t.type !== 'expense') return false;
+          const d = new Date(t.date);
+          return d >= monthStart && d <= monthEnd;
+        });
+        const categoryExpenses = groupTransactionsByCategory(monthTransactions, 'expense');
         const currentCategoryExpense = categoryExpenses[categoryId] || 0;
         
         // 计算添加新支出后的总额
@@ -2504,7 +2547,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         // 更新预算使用情况
         // 获取当前月份的预算，如果不存在则使用月度模板
-        const currentMonthKey = new Date().toISOString().slice(0, 7);
+        // 【时区修复】toISOString 是 UTC，本地 0-8 点会错位为上个月
+        const _now = new Date();
+        const currentMonthKey = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
         const monthlyBudget = appData.budgets[currentMonthKey]?.total || appData.budgets.monthly.total;
         const budgetUsage = monthlyBudget > 0 ? (monthlyExpense / monthlyBudget) * 100 : 0;
         
@@ -3029,16 +3074,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
 
       // 添加交易表格事件监听器
+      // 注意：全选框的监听器已在 addEventListeners 中一次性绑定，
+      // 这里不再重复绑定（原实现每次重渲染表格都会叠加一个监听器）
       function addTransactionTableEventListeners() {
-        // 全选/取消全选
-        document.getElementById('selectAllTransactions').addEventListener('change', function() {
-          const checkboxes = document.querySelectorAll('.transaction-checkbox');
-          checkboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
-          });
-          updateDeleteSelectedButton();
-        });
-        
         // 单个复选框变化
         document.querySelectorAll('.transaction-checkbox').forEach(checkbox => {
           checkbox.addEventListener('change', updateDeleteSelectedButton);
@@ -3139,6 +3177,89 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         }
       }
       
+      // ============================================================
+      // 【逻辑修复】预算默认值统一出口
+      // 原先「天数×60 + 固定620/800/200 + 剩余平分」这套规则在 3 处各复制了一份
+      // （updateBudgetPage 年度分支 / submitBudgetEdit 年度重算 / 新月份初始化），
+      // 改一处忘两处迟早出事。现抽成两个函数：
+      //   generateDefaultMonthBudget(year, month) —— 生成某月默认预算（不碰任何全局状态）
+      //   computeYearlyBudget()                  —— 年度汇总：优先用已保存的月度预算，
+      //        只有该月尚无数据时才用默认值。修复「年度视图强制覆写用户自定义月度预算」的问题。
+      // ============================================================
+      function round2(n) {
+        return Math.round(n * 100) / 100;
+      }
+
+      function generateDefaultMonthBudget(year, month) {
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const total = daysInMonth * 60;
+        const categories = {
+          shopping: 620,
+          other_expense: 800,
+          food: 200,
+          transport: 0,
+          entertainment: 0,
+          housing: 0,
+          utilities: 0,
+          healthcare: 0,
+          education: 0,
+          insurance: 0
+        };
+
+        // 固定预算（620+800+200）超出总预算时按比例缩减（正常月份不会触发，兜底用）
+        const fixedTotal = 620 + 800 + 200;
+        if (fixedTotal > total) {
+          const ratio = total / fixedTotal;
+          categories.shopping = round2(620 * ratio);
+          categories.other_expense = round2(800 * ratio);
+          categories.food = round2(200 * ratio);
+        }
+
+        // 剩余预算平分给其他分类
+        const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
+        const allocated = categories.shopping + categories.other_expense + categories.food;
+        const remaining = Math.max(0, total - allocated);
+        const perCategory = round2(remaining / otherCategories.length);
+        otherCategories.forEach(cat => {
+          categories[cat] = perCategory;
+        });
+
+        // 修正舍入误差，确保分类合计严格等于总预算
+        let totalCategoryBudget = 0;
+        Object.keys(categories).forEach(cat => {
+          totalCategoryBudget += categories[cat];
+        });
+        const diff = total - totalCategoryBudget;
+        if (Math.abs(diff) >= 0.005) {
+          categories[otherCategories[0]] += diff;
+        }
+
+        return { total, categories };
+      }
+
+      function computeYearlyBudget() {
+        const currentYear = new Date().getFullYear();
+        let yearlyTotal = 0;
+        const yearlyCategories = {};
+
+        for (let month = 1; month <= 12; month++) {
+          const monthKey = `${currentYear}-${String(month).padStart(2, '0')}`;
+          // 已保存的月度预算优先（深拷贝，避免污染）；没有才生成默认值
+          const monthBudget = appData.budgets[monthKey]
+            ? JSON.parse(JSON.stringify(appData.budgets[monthKey]))
+            : generateDefaultMonthBudget(currentYear, month);
+
+          yearlyTotal += monthBudget.total || 0;
+          if (monthBudget.categories) {
+            Object.keys(monthBudget.categories).forEach(category => {
+              yearlyCategories[category] = (yearlyCategories[category] || 0) + (monthBudget.categories[category] || 0);
+            });
+          }
+        }
+
+        return { total: yearlyTotal, categories: yearlyCategories };
+      }
+
       // 更新预算管理页面
       function updateBudgetPage() {
         const budgetPeriodSelector = document.getElementById('budgetPeriodSelector');
@@ -3171,125 +3292,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           budget = appData.budgets[selectedMonth];
           currentMonthData = selectedMonth;
         } else if (period === 'yearly') {
-          // 计算年度预算为每月预算的总和
-          const currentYear = new Date().getFullYear();
-          let yearlyTotal = 0;
-          let yearlyCategories = {};
-          
-          // 遍历当年的每个月份，计算年度预算
-          for (let month = 1; month <= 12; month++) {
-            const monthKey = `${currentYear}-${month.toString().padStart(2, '0')}`;
-            let monthBudget;
-            
-            // 强制使用基于该月天数的预算计算，确保一致性
-            const daysInMonth = new Date(currentYear, month, 0).getDate();
-            const calculatedBudget = daysInMonth * 60;
-            
-            if (appData.budgets[monthKey]) {
-              // 【数据安全修复】深拷贝后再计算，避免「查看年度预算」污染已保存的月度预算
-              monthBudget = JSON.parse(JSON.stringify(appData.budgets[monthKey]));
-              monthBudget.total = calculatedBudget;
-              
-              // 重新设置固定预算值
-              monthBudget.categories.shopping = 620;
-              monthBudget.categories.other_expense = 800;
-              monthBudget.categories.food = 200;
-              
-              // 计算已分配的固定预算
-              const fixedBudget = 620 + 800 + 200;
-              let remainingBudget = calculatedBudget - fixedBudget;
-              
-              // 获取其他分类
-              const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
-              
-              // 分配剩余预算给其他分类（平分）
-              if (otherCategories.length > 0) {
-                const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
-                otherCategories.forEach(cat => {
-                  monthBudget.categories[cat] = budgetPerCategory;
-                });
-              }
-              
-              // 验证并修正分类预算总额等于总预算
-              let totalCategoryBudget = 0;
-              Object.keys(monthBudget.categories).forEach(cat => {
-                totalCategoryBudget += monthBudget.categories[cat];
-              });
-              const difference = calculatedBudget - totalCategoryBudget;
-              if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
-                // 将差异分配到第一个其他分类
-                monthBudget.categories[otherCategories[0]] += difference;
-              }
-              
-              // 【数据安全修复】不再写回 appData：年度视图只是只读计算
-            } else {
-              // 该月份没有数据，初始化该月份的数据
-              monthBudget = {
-                total: calculatedBudget,
-                categories: {
-                  shopping: 620,
-                  other_expense: 800,
-                  food: 200,
-                  transport: 0,
-                  entertainment: 0,
-                  housing: 0,
-                  utilities: 0,
-                  healthcare: 0,
-                  education: 0,
-                  insurance: 0
-                }
-              };
-              
-              // 计算已分配的固定预算
-              const fixedBudget = 620 + 800 + 200;
-              let remainingBudget = calculatedBudget - fixedBudget;
-              
-              // 获取其他分类
-              const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
-              
-              // 分配剩余预算给其他分类（平分）
-              if (otherCategories.length > 0 && remainingBudget > 0) {
-                const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
-                otherCategories.forEach(cat => {
-                  monthBudget.categories[cat] = budgetPerCategory;
-                });
-              }
-              
-              // 验证并修正分类预算总额等于总预算
-              let totalCategoryBudget = 0;
-              Object.keys(monthBudget.categories).forEach(cat => {
-                totalCategoryBudget += monthBudget.categories[cat];
-              });
-              const difference = calculatedBudget - totalCategoryBudget;
-              if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
-                // 将差异分配到第一个其他分类
-                monthBudget.categories[otherCategories[0]] += difference;
-              }
-              
-              // 【数据安全修复】同上，不再写回 appData
-            }
-            
-            // 累加总预算
-            yearlyTotal += monthBudget.total || 0;
-            
-            // 累加分类预算
-            if (monthBudget.categories) {
-              Object.keys(monthBudget.categories).forEach(category => {
-                if (!yearlyCategories[category]) {
-                  yearlyCategories[category] = 0;
-                }
-                yearlyCategories[category] += monthBudget.categories[category] || 0;
-              });
-            }
-          }
-          
-          // 更新年度预算数据
-          appData.budgets.yearly.total = yearlyTotal;
-          appData.budgets.yearly.categories = yearlyCategories;
+          // 年度预算 = 12 个月预算之和（优先用已保存的月度预算，缺省月份用默认值）
+          // 【逻辑修复】原实现强制把每个月总预算覆写为「天数×60」，用户自定义的月度预算在年度视图全被踩掉
+          const yearly = computeYearlyBudget();
+          appData.budgets.yearly.total = yearly.total;
+          appData.budgets.yearly.categories = yearly.categories;
           budget = appData.budgets.yearly;
         } else {
           // 默认使用当前月份
-          const currentMonth = new Date().toISOString().slice(0, 7);
+          // 【时区修复】toISOString 是 UTC，本地 0-8 点会错位为上个月
+          const _now = new Date();
+          const currentMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
           if (!appData.budgets[currentMonth]) {
             appData.budgets[currentMonth] = JSON.parse(JSON.stringify(appData.budgets.monthly));
             budgetNeedsInit = true;
@@ -3425,7 +3438,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           // 获取选中月份的交易
           const [year, month] = selectedMonth.split('-').map(Number);
           const startDate = new Date(year, month - 1, 1);
-          const endDate = new Date(year, month, 0);
+          // 【边界修复】月末最后一天要到 23:59:59.999，否则当天交易被漏掉（同 getCurrentMonthRange 的修复）
+          const endDate = new Date(year, month, 0, 23, 59, 59, 999);
           transactions = appData.transactions.filter(transaction => {
             if (transaction.type !== 'expense') return false;
             const transDate = new Date(transaction.date);
@@ -3519,21 +3533,16 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 根据选择的周期和月份获取对应的预算数据
         let budget;
         if (period === 'monthly' && selectedMonth) {
-          // 月度预算使用选中月份的数据
-          if (!appData.budgets[selectedMonth]) {
-            // 如果没有该月份的数据，使用月度模板
-            appData.budgets[selectedMonth] = JSON.parse(JSON.stringify(appData.budgets.monthly));
-          }
-          budget = appData.budgets[selectedMonth];
+          // 【数据安全修复】渲染函数不静默创建月份数据；该月没有预算就用月度模板兜底
+          budget = appData.budgets[selectedMonth] || appData.budgets.monthly;
         } else if (period === 'yearly') {
           budget = appData.budgets.yearly;
         } else {
           // 默认使用当前月份
-          const currentMonth = new Date().toISOString().slice(0, 7);
-          if (!appData.budgets[currentMonth]) {
-            appData.budgets[currentMonth] = JSON.parse(JSON.stringify(appData.budgets.monthly));
-          }
-          budget = appData.budgets[currentMonth];
+          // 【时区修复】toISOString 是 UTC，本地 0-8 点会错位为上个月
+          const _now = new Date();
+          const currentMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
+          budget = appData.budgets[currentMonth] || appData.budgets.monthly;
         }
         
         // 获取当前期间的交易
@@ -3542,7 +3551,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           // 获取选中月份的交易
           const [year, month] = selectedMonth.split('-').map(Number);
           const startDate = new Date(year, month - 1, 1);
-          const endDate = new Date(year, month, 0);
+          // 【边界修复】月末最后一天要到 23:59:59.999，否则当天交易被漏掉（同 getCurrentMonthRange 的修复）
+          const endDate = new Date(year, month, 0, 23, 59, 59, 999);
           transactions = appData.transactions.filter(transaction => {
             if (transaction.type !== 'expense') return false;
             const transDate = new Date(transaction.date);
@@ -3786,13 +3796,21 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 获取当前月份的交易
         const currentMonthTransactions = getCurrentMonthTransactions();
         const expenseByCategory = groupTransactionsByCategory(currentMonthTransactions, 'expense');
-        
+
+        // 【口径修复】超支建议应基于「当月实际生效的预算」：
+        // 已保存的当月预算优先，没有才用默认生成值。原来固定拿 budgets.monthly 模板，
+        // 用户自定义过当月预算时，超支判断基准是错的。
+        const now = new Date();
+        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const effectiveBudget = appData.budgets[currentMonthKey]
+          || generateDefaultMonthBudget(now.getFullYear(), now.getMonth() + 1);
+
         // 分析支出模式
         const suggestions = [];
-        
+
         // 检查是否有超出预算的类别
-        Object.keys(appData.budgets.monthly.categories).forEach(categoryId => {
-          const budget = appData.budgets.monthly.categories[categoryId];
+        Object.keys(effectiveBudget.categories).forEach(categoryId => {
+          const budget = effectiveBudget.categories[categoryId];
           const actual = expenseByCategory[categoryId] || 0;
           
           if (actual > budget) {
@@ -4062,7 +4080,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         });
         
         // 添加交易表单提交
-        document.getElementById('addTransactionForm').addEventListener('submit', function(e) {
+        document.getElementById('addTransactionForm').addEventListener('submit', async function(e) {
           e.preventDefault();
           
           const type = document.getElementById('transactionType').value;
@@ -4101,8 +4119,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           }
           
           // 如果是支出类型，检查是否超出预算
+          let budgetCheck = null;
           if (type === 'expense') {
-            const budgetCheck = checkBudgetExceedance(category, amount, date);
+            budgetCheck = checkBudgetExceedance(category, amount, date);
             
             if (budgetCheck.isExceeded) {
               // 如果超出预算，需要检查是否有填写理由
@@ -4124,20 +4143,25 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           };
           
           // 如果是超支支出，添加超支原因
-          if (type === 'expense' && checkBudgetExceedance(category, amount, date).isExceeded) {
+          if (budgetCheck && budgetCheck.isExceeded) {
             transaction.budgetExceedReason = budgetExceedReason;
           }
           
-          addTransaction(transaction);
-          
-          // 重置表单
-          this.reset();
-          document.getElementById('transactionDate').value = formatDate(new Date());
-          document.getElementById('transactionType').value = 'expense';
-          updateTransactionTypeButtons('expense');
-          document.getElementById('budgetExceedReasonContainer').style.display = 'none';
-          
-          showNotification('添加成功', '交易记录已成功添加。');
+          const saved = await addTransaction(transaction);
+
+          if (saved) {
+            // 重置表单
+            this.reset();
+            document.getElementById('transactionDate').value = formatDate(new Date());
+            document.getElementById('transactionType').value = 'expense';
+            updateTransactionTypeButtons('expense');
+            document.getElementById('budgetExceedReasonContainer').style.display = 'none';
+
+            showNotification('添加成功', '交易记录已成功添加。');
+          } else {
+            // 保存失败：保留表单内容，方便用户检查网络后直接重试
+            showNotification('保存失败', '云端写入未成功，本次记录未保存。请检查网络后重试，表单内容已为你保留。', 'error');
+          }
         });
         
         // 实时预算检查功能
@@ -4205,7 +4229,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         });
         
         // 提交快速添加
-        document.getElementById('submitQuickAdd').addEventListener('click', function() {
+        document.getElementById('submitQuickAdd').addEventListener('click', async function() {
           const type = document.getElementById('quickTransactionType').value;
           const amount = parseFloat(document.getElementById('quickTransactionAmount').value);
           const category = document.getElementById('quickTransactionCategory').value;
@@ -4230,7 +4254,28 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             document.getElementById('quickTransactionDate').focus();
             return;
           }
-          
+
+          // 【口径统一】单笔支出金额不低于50元时，描述为必填项（与主表单一致）
+          if (type === 'expense' && amount >= 50 && (!description || description.trim() === '')) {
+            showNotification('输入错误', '本次支出金额超出系统限制，描述为必填项。', 'error');
+            document.getElementById('quickTransactionDescription').focus();
+            return;
+          }
+
+          // 【口径统一】支出超预算时必须在描述中说明原因（与主表单一致）
+          let budgetExceeded = false;
+          if (type === 'expense') {
+            const quickBudgetCheck = checkBudgetExceedance(category, amount, date);
+            if (quickBudgetCheck.isExceeded) {
+              budgetExceeded = true;
+              if (!description || description.trim() === '') {
+                showNotification('预算超支', `该支出将超出预算¥${quickBudgetCheck.exceededAmount.toFixed(2)}，请在描述中说明超支原因。`, 'error');
+                document.getElementById('quickTransactionDescription').focus();
+                return;
+              }
+            }
+          }
+
           const transaction = {
             type,
             amount,
@@ -4238,19 +4283,27 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             date,
             description
           };
+          if (budgetExceeded) {
+            transaction.budgetExceedReason = description;
+          }
+
+          const saved = await addTransaction(transaction);
           
-          addTransaction(transaction);
-          
-          // 重置表单
-          document.getElementById('quickAddForm').reset();
-          document.getElementById('quickTransactionDate').value = formatDate(new Date());
-          document.getElementById('quickTransactionType').value = 'expense';
-          updateTransactionTypeButtons('expense', 'quick');
-          
-          // 关闭模态框
-          document.getElementById('quickAddModal').classList.add('hidden');
-          
-          showNotification('添加成功', '交易记录已成功添加。');
+          if (saved) {
+            // 重置表单
+            document.getElementById('quickAddForm').reset();
+            document.getElementById('quickTransactionDate').value = formatDate(new Date());
+            document.getElementById('quickTransactionType').value = 'expense';
+            updateTransactionTypeButtons('expense', 'quick');
+
+            // 关闭模态框
+            document.getElementById('quickAddModal').classList.add('hidden');
+
+            showNotification('添加成功', '交易记录已成功添加。');
+          } else {
+            // 保存失败：保留模态框和表单内容，方便重试
+            showNotification('保存失败', '云端写入未成功，本次记录未保存。请检查网络后重试。', 'error');
+          }
         });
         
         // 关闭通知
@@ -4307,6 +4360,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           }
         });
         
+        // 全选/取消全选（只绑定一次；原实现在每次表格重渲染时都叠加监听器）
+        document.getElementById('selectAllTransactions').addEventListener('change', function() {
+          const checkboxes = document.querySelectorAll('.transaction-checkbox');
+          checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+          });
+          updateDeleteSelectedButton();
+        });
+
         // 删除选中的交易
         document.getElementById('deleteSelectedBtn').addEventListener('click', function() {
           const checkboxes = document.querySelectorAll('.transaction-checkbox:checked');
@@ -4412,123 +4474,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           console.log(`总预算已更新为: ${amount}`);
           
           // 如果编辑的是月度预算，自动重新计算年度预算
+          // 【逻辑修复】年度汇总改为尊重已保存的月度预算（含刚修改的这一个），不再强制覆写为「天数×60」
           if (type === 'monthly') {
-            console.log('编辑的是月度预算，重新计算年度预算');
-            const currentYear = new Date().getFullYear();
-            let yearlyTotal = 0;
-            let yearlyCategories = {};
-            
-            // 遍历当年的每个月份，计算年度预算
-            for (let month = 1; month <= 12; month++) {
-              const monthKey = `${currentYear}-${month.toString().padStart(2, '0')}`;
-              let monthBudget;
-              
-              // 强制使用基于该月天数的预算计算，确保一致性
-              const daysInMonth = new Date(currentYear, month, 0).getDate();
-              const calculatedBudget = daysInMonth * 60;
-              
-              if (appData.budgets[monthKey]) {
-                // 【数据安全修复】深拷贝后再计算，保存预算时不再顺带改写其它月份
-                monthBudget = JSON.parse(JSON.stringify(appData.budgets[monthKey]));
-                monthBudget.total = calculatedBudget;
-                
-                // 重新设置固定预算值
-                monthBudget.categories.shopping = 620;
-                monthBudget.categories.other_expense = 800;
-                monthBudget.categories.food = 200;
-                
-                // 计算已分配的固定预算
-                const fixedBudget = 620 + 800 + 200;
-                let remainingBudget = calculatedBudget - fixedBudget;
-                
-                // 获取其他分类
-                const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
-                
-                // 分配剩余预算给其他分类（平分）
-                if (otherCategories.length > 0) {
-                  const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
-                  otherCategories.forEach(cat => {
-                    monthBudget.categories[cat] = budgetPerCategory;
-                  });
-                }
-                
-                // 验证并修正分类预算总额等于总预算
-                let totalCategoryBudget = 0;
-                Object.keys(monthBudget.categories).forEach(cat => {
-                  totalCategoryBudget += monthBudget.categories[cat];
-                });
-                const difference = calculatedBudget - totalCategoryBudget;
-                if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
-                  // 将差异分配到第一个其他分类
-                  monthBudget.categories[otherCategories[0]] += difference;
-                }
-                
-                // 【数据安全修复】不再写回 appData：只是重算年度汇总
-              } else {
-                // 该月份没有数据，初始化该月份的数据
-                monthBudget = {
-                  total: calculatedBudget,
-                  categories: {
-                    shopping: 620,
-                    other_expense: 800,
-                    food: 200,
-                    transport: 0,
-                    entertainment: 0,
-                    housing: 0,
-                    utilities: 0,
-                    healthcare: 0,
-                    education: 0,
-                    insurance: 0
-                  }
-                };
-                
-                // 计算已分配的固定预算
-                const fixedBudget = 620 + 800 + 200;
-                let remainingBudget = calculatedBudget - fixedBudget;
-                
-                // 获取其他分类
-                const otherCategories = ['transport', 'entertainment', 'housing', 'utilities', 'healthcare', 'education', 'insurance'];
-                
-                // 分配剩余预算给其他分类（平分）
-                if (otherCategories.length > 0 && remainingBudget > 0) {
-                  const budgetPerCategory = Math.round((remainingBudget / otherCategories.length) * 100) / 100;
-                  otherCategories.forEach(cat => {
-                    monthBudget.categories[cat] = budgetPerCategory;
-                  });
-                }
-                
-                // 验证并修正分类预算总额等于总预算
-                let totalCategoryBudget = 0;
-                Object.keys(monthBudget.categories).forEach(cat => {
-                  totalCategoryBudget += monthBudget.categories[cat];
-                });
-                const difference = calculatedBudget - totalCategoryBudget;
-                if (Math.abs(difference) >= 0.005 && otherCategories.length > 0) {
-                  // 将差异分配到第一个其他分类
-                  monthBudget.categories[otherCategories[0]] += difference;
-                }
-                
-                // 【数据安全修复】同上，不再写回 appData
-              }
-              
-              // 累加总预算
-              yearlyTotal += monthBudget.total || 0;
-              
-              // 累加分类预算
-              if (monthBudget.categories) {
-                Object.keys(monthBudget.categories).forEach(category => {
-                  if (!yearlyCategories[category]) {
-                    yearlyCategories[category] = 0;
-                  }
-                  yearlyCategories[category] += monthBudget.categories[category] || 0;
-                });
-              }
-            }
-            
-            // 更新年度预算数据
-            appData.budgets.yearly.total = yearlyTotal;
-            appData.budgets.yearly.categories = yearlyCategories;
-            console.log(`年度预算已重新计算为: ${yearlyTotal}`);
+            const yearly = computeYearlyBudget();
+            appData.budgets.yearly.total = yearly.total;
+            appData.budgets.yearly.categories = yearly.categories;
+            console.log(`年度预算已重新计算为: ${yearly.total}`);
           }
           
           // 保存数据
@@ -4668,19 +4619,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         // 分类图表类型切换
         document.getElementById('categoryChartType').addEventListener('change', function() {
-          if (currentStatsType === 'daily') {
-            const date = document.getElementById('dailyDatePicker').value;
-            if (date) {
-              const transactions = appData.transactions.filter(t => t.date === date);
-              updateStatsCategoryChart(transactions);
-            }
-          } else {
-            const month = document.getElementById('monthlyDatePicker').value;
-            if (month) {
-              const transactions = appData.transactions.filter(t => t.date.startsWith(month));
-              updateStatsCategoryChart(transactions);
-            }
-          }
+          // 【口径统一】原实现年度模式下会误读月份选择器的数据，统一走公共函数
+          updateStatsCategoryChart(getTransactionsForCurrentPeriod());
         });
         
         // 分类统计类型切换
@@ -4694,35 +4634,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         // 筛选器变化
         document.getElementById('statsFilterType').addEventListener('change', function() {
-          if (currentStatsType === 'daily') {
-            const date = document.getElementById('dailyDatePicker').value;
-            if (date) {
-              const transactions = appData.transactions.filter(t => t.date === date);
-              renderDailyTransactions(transactions);
-            }
-          } else {
-            const month = document.getElementById('monthlyDatePicker').value;
-            if (month) {
-              const transactions = appData.transactions.filter(t => t.date.startsWith(month));
-              renderDailyTransactions(transactions);
-            }
-          }
+          // 【口径统一】重新加载当前统计期间的数据（原实现年度模式取错数据源，且汇总视图不刷新）
+          reloadCurrentStats();
         });
-        
+
         document.getElementById('statsFilterCategory').addEventListener('change', function() {
-          if (currentStatsType === 'daily') {
-            const date = document.getElementById('dailyDatePicker').value;
-            if (date) {
-              const transactions = appData.transactions.filter(t => t.date === date);
-              renderDailyTransactions(transactions);
-            }
-          } else {
-            const month = document.getElementById('monthlyDatePicker').value;
-            if (month) {
-              const transactions = appData.transactions.filter(t => t.date.startsWith(month));
-              renderDailyTransactions(transactions);
-            }
-          }
+          reloadCurrentStats();
         });
         
         // 收支明细/汇总切换
@@ -4751,23 +4668,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           const isSummaryView = !document.getElementById('transactionsSummaryContainer').classList.contains('hidden');
           
           // 获取当前显示的交易数据
-          let transactions = [];
-          if (currentStatsType === 'daily') {
-            const date = document.getElementById('dailyDatePicker').value;
-            if (date) {
-              transactions = appData.transactions.filter(t => t.date === date);
-            }
-          } else if (currentStatsType === 'monthly') {
-            const month = document.getElementById('monthlyDatePicker').value;
-            if (month) {
-              transactions = appData.transactions.filter(t => t.date.startsWith(month));
-            }
-          } else if (currentStatsType === 'yearly') {
-            const year = document.getElementById('yearlyDatePicker').value;
-            if (year) {
-              transactions = appData.transactions.filter(t => t.date.startsWith(year));
-            }
-          }
+          // 【口径统一】统一走公共函数，修复年度模式分支缺失的问题
+          let transactions = getTransactionsForCurrentPeriod();
           
           // 应用筛选器
           const filterType = document.getElementById('statsFilterType').value;
@@ -4823,27 +4725,28 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             });
             const totalBalance = totalIncome - totalExpense;
             
+            // 【导出修复】金额写数字而非字符串，Excel 里可以直接求和/做公式
             const exportData = sortedDates.map(date => {
               const data = summaryByDate[date];
               const balance = data.incomeTotal - data.expenseTotal;
               return {
                 '日期': date,
                 '收入笔数': data.incomeCount,
-                '收入合计': data.incomeTotal.toFixed(2),
+                '收入合计': Math.round(data.incomeTotal * 100) / 100,
                 '支出笔数': data.expenseCount,
-                '支出合计': data.expenseTotal.toFixed(2),
-                '结余': balance.toFixed(2)
+                '支出合计': Math.round(data.expenseTotal * 100) / 100,
+                '结余': Math.round(balance * 100) / 100
               };
             });
-            
+
             // 添加合计行
             exportData.push({
               '日期': '合计',
               '收入笔数': totalIncomeCount,
-              '收入合计': totalIncome.toFixed(2),
+              '收入合计': Math.round(totalIncome * 100) / 100,
               '支出笔数': totalExpenseCount,
-              '支出合计': totalExpense.toFixed(2),
-              '结余': totalBalance.toFixed(2)
+              '支出合计': Math.round(totalExpense * 100) / 100,
+              '结余': Math.round(totalBalance * 100) / 100
             });
             
             const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -4870,10 +4773,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             fileName += '.xlsx';
             
             XLSX.writeFile(workbook, fileName);
-            showNotification('导出成功', `已导出 ${exportData.length} 天的汇总数据`, 'success');
+            // 【导出修复】exportData 已含「合计」行，提示天数要减一
+            showNotification('导出成功', `已导出 ${exportData.length - 1} 天的汇总数据`, 'success');
           } else {
-            // 导出明细数据（按日期正序排序）
-            transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // 导出明细数据（按日期倒序排序，与页面明细显示一致：最新在前）
+            transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
             const exportData = transactions.map(t => {
               const category = t.type === 'income' 
                 ? appData.categories.income.find(c => c.id === t.category)
@@ -4969,6 +4873,36 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       let statsCategoryChart = null;
       let dailyComparisonChart = null;
 
+      // 【口径统一】按当前统计类型（日/月/年）获取对应期间的交易数据
+      // 修复：原有多处 if(daily){...}else{读月选择器} 的分支，年度模式下改筛选器/图表类型
+      // 会错误地拿「月份选择器」的数据渲染，导致明细表显示的不是所选年份的数据。
+      function getTransactionsForCurrentPeriod() {
+        if (currentStatsType === 'daily') {
+          const date = document.getElementById('dailyDatePicker').value;
+          return date ? appData.transactions.filter(t => t.date === date) : [];
+        } else if (currentStatsType === 'monthly') {
+          const month = document.getElementById('monthlyDatePicker').value;
+          return month ? appData.transactions.filter(t => t.date.startsWith(month)) : [];
+        } else {
+          const year = document.getElementById('yearlyDatePicker').value;
+          return year ? appData.transactions.filter(t => t.date.startsWith(year)) : [];
+        }
+      }
+
+      // 【口径统一】按当前统计类型重新加载统计页面（含明细表、汇总表、图表、分类统计）
+      function reloadCurrentStats() {
+        if (currentStatsType === 'daily') {
+          const date = document.getElementById('dailyDatePicker').value;
+          if (date) loadDailyStats(date);
+        } else if (currentStatsType === 'monthly') {
+          const month = document.getElementById('monthlyDatePicker').value;
+          if (month) loadMonthlyStats(month);
+        } else {
+          const year = document.getElementById('yearlyDatePicker').value;
+          if (year) loadYearlyStats(year);
+        }
+      }
+
       // 初始化统计分析页面
       function initDailyStats() {
         // 设置默认日期为今天
@@ -4976,7 +4910,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         document.getElementById('dailyDatePicker').value = today;
         
         // 设置默认月份为当前月
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        // 【时区修复】toISOString 是 UTC，本地 0-8 点（每月 1 号凌晨）会默认成上个月
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('monthlyDatePicker').value = currentMonth;
         
         // 设置默认年份为当前年
@@ -5180,12 +5116,16 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         const balance = incomeTotal - expenseTotal;
         
         // 计算日均支出
+        // 【逻辑修复】原代码 `new Date(period + '-01').daysInMonth` 中 daysInMonth 不是 Date 的属性，
+        // 恒为 undefined，导致月均支出永远按 30 天算（2月偏低、31天月偏低）；年度固定 365 天闰年也不准
         let avgDailyExpense = 0;
         if (type === 'yearly') {
-          const daysInYear = 365;
+          const yearNum = parseInt(period);
+          const daysInYear = Math.round((new Date(yearNum + 1, 0, 1) - new Date(yearNum, 0, 1)) / 86400000);
           avgDailyExpense = expenseTotal / daysInYear;
         } else if (type === 'monthly') {
-          const daysInMonth = new Date(period + '-01').daysInMonth || 30;
+          const [yearNum, monthNum] = period.split('-').map(Number);
+          const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
           avgDailyExpense = expenseTotal / daysInMonth;
         } else {
           avgDailyExpense = expenseTotal;
@@ -5559,17 +5499,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         }
         
         // 重新加载当前数据
-        if (currentStatsType === 'daily') {
-          const date = document.getElementById('dailyDatePicker').value;
-          if (date) {
-            loadDailyStats(date);
-          }
-        } else {
-          const month = document.getElementById('monthlyDatePicker').value;
-          if (month) {
-            loadMonthlyStats(month);
-          }
-        }
+        // 【口径统一】原实现年度模式下会误读月份选择器的数据
+        reloadCurrentStats();
       }
 
       // 渲染交易明细
@@ -5591,73 +5522,123 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           tableBody.innerHTML = `
             <tr>
               <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
-                ${currentStatsType === 'daily' ? '该日期' : '该月份'}没有符合条件的交易记录
+                ${currentStatsType === 'daily' ? '该日期' : currentStatsType === 'monthly' ? '该月份' : '该年份'}没有符合条件的交易记录
               </td>
             </tr>
           `;
           return;
         }
         
-        // 按时间排序（正序）
-        const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-          return new Date(a.createdAt || a.date) - new Date(b.createdAt || b.date);
+        // 【条理修复】收入、支出分开统计，不再混排：
+        // 收入一块、支出一块，各自带小计；组内按日期倒序（最新日期排最前）。
+        // 原实现把收入和支出按时间混在一起，无法按类型看清各自的账。
+        const sortByDateDesc = (list) => [...list].sort((a, b) => {
+          if (a.date !== b.date) {
+            return a.date > b.date ? -1 : 1;
+          }
+          const ta = a.createdAt || '';
+          const tb = b.createdAt || '';
+          return ta > tb ? -1 : ta < tb ? 1 : 0;
         });
-        
-        // 渲染表格
-        tableBody.innerHTML = sortedTransactions.map(transaction => {
-          // 获取分类名称
-          const category = transaction.type === 'income' 
-            ? appData.categories.income.find(c => c.id === transaction.category)
-            : appData.categories.expense.find(c => c.id === transaction.category);
-          
-          const categoryName = category ? category.name : '未分类';
-          const typeText = transaction.type === 'income' ? '收入' : '支出';
-          const typeClass = transaction.type === 'income' ? 'text-secondary' : 'text-danger';
-          
-          return `
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${transaction.date}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${typeClass}">
-                  ${typeText}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">${esc(categoryName)}</td>
-              <td class="px-6 py-4 whitespace-nowrap font-medium ${typeClass}">
-                ¥${transaction.amount.toFixed(2)}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${esc(transaction.description || '-')}
+
+        const incomeGroup = filterType === 'expense'
+          ? []
+          : sortByDateDesc(filteredTransactions.filter(t => t.type === 'income'));
+        const expenseGroup = filterType === 'income'
+          ? []
+          : sortByDateDesc(filteredTransactions.filter(t => t.type === 'expense'));
+
+        // 渲染一个类型分块：灰色小标题行（共 N 笔，合计）+ 该类型的所有流水
+        const renderGroup = (list, type) => {
+          const isIncome = type === 'income';
+          const groupText = isIncome ? '收入' : '支出';
+          const groupClass = isIncome ? 'text-secondary' : 'text-danger';
+          const groupTotal = list.reduce((sum, t) => sum + t.amount, 0);
+
+          const headerHtml = `
+            <tr class="bg-gray-100">
+              <td colspan="5" class="px-6 py-2 text-sm font-semibold ${groupClass}">
+                <i class="fa ${isIncome ? 'fa-plus-circle' : 'fa-minus-circle'} mr-1"></i>${groupText}明细：共 ${list.length} 笔，合计 ¥${groupTotal.toFixed(2)}
               </td>
             </tr>
           `;
-        }).join('');
+
+          let prevDate = '';
+          const rows = list.map(transaction => {
+            // 获取分类名称
+            const category = transaction.type === 'income'
+              ? appData.categories.income.find(c => c.id === transaction.category)
+              : appData.categories.expense.find(c => c.id === transaction.category);
+
+            const categoryName = category ? category.name : '未分类';
+            const typeText = transaction.type === 'income' ? '收入' : '支出';
+            const typeClass = transaction.type === 'income' ? 'text-secondary' : 'text-danger';
+
+            // 同一天的日期只在当天第一行显示，行按日期自然分组
+            const showDate = transaction.date !== prevDate;
+            prevDate = transaction.date;
+
+            return `
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  ${showDate ? transaction.date : ''}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${typeClass}">
+                    ${typeText}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">${esc(categoryName)}</td>
+                <td class="px-6 py-4 whitespace-nowrap font-medium ${typeClass}">
+                  ¥${transaction.amount.toFixed(2)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  ${esc(transaction.description || '-')}
+                </td>
+              </tr>
+            `;
+          }).join('');
+
+          return headerHtml + rows;
+        };
+
+        let rowsHtml = '';
+        if (incomeGroup.length > 0) {
+          rowsHtml += renderGroup(incomeGroup, 'income');
+        }
+        if (expenseGroup.length > 0) {
+          rowsHtml += renderGroup(expenseGroup, 'expense');
+        }
+
+        // 底部合计行：整体口径（收入 + 支出 + 结余），与汇总视图呼应
+        const incTotal = filteredTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+        const expTotal = filteredTransactions.filter(t => t.type !== 'income').reduce((s, t) => s + t.amount, 0);
+        const totalBalance = incTotal - expTotal;
+        const totalBalanceClass = totalBalance >= 0 ? 'text-secondary' : 'text-danger';
+        const totalRowHtml = `
+          <tr class="bg-gray-50 font-semibold">
+            <td colspan="3" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              合计：共 ${filteredTransactions.length} 笔（收入 ${incomeGroup.length} 笔 / 支出 ${expenseGroup.length} 笔）
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <span class="text-secondary">收 ¥${incTotal.toFixed(2)}</span>
+              <span class="text-gray-400 mx-1">/</span>
+              <span class="text-danger">支 ¥${expTotal.toFixed(2)}</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm ${totalBalanceClass}">
+              结余 ¥${totalBalance.toFixed(2)}
+            </td>
+          </tr>
+        `;
+        tableBody.innerHTML = rowsHtml + totalRowHtml;
       }
 
       // 更新收支汇总（按日期统计）
       function updateDailySummary() {
         const tableBody = document.getElementById('dailySummaryTable');
-        let transactions = [];
 
-        // 根据统计类型获取交易数据
-        if (currentStatsType === 'daily') {
-          const date = document.getElementById('dailyDatePicker').value;
-          if (date) {
-            transactions = appData.transactions.filter(t => t.date === date);
-          }
-        } else if (currentStatsType === 'monthly') {
-          const month = document.getElementById('monthlyDatePicker').value;
-          if (month) {
-            transactions = appData.transactions.filter(t => t.date.startsWith(month));
-          }
-        } else if (currentStatsType === 'yearly') {
-          const year = document.getElementById('yearlyDatePicker').value;
-          if (year) {
-            transactions = appData.transactions.filter(t => t.date.startsWith(year));
-          }
-        }
+        // 【口径统一】按当前统计类型获取交易数据
+        const transactions = getTransactionsForCurrentPeriod();
 
         // 应用筛选器
         const filterType = document.getElementById('statsFilterType').value;
@@ -6018,38 +5999,86 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       <!-- 学习记录 -->
       <div id="study-records-tab-content" class="tab-content hidden animate-fade-in">
-        <!-- 添加学习记录 -->
+        <!-- 学习打卡（计时打卡 + 手动补录融合） -->
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <h3 class="text-lg font-semibold text-gray-800 mb-4">添加学习记录</h3>
-          <form id="addStudyRecordForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">日期</label>
-              <input type="date" id="recordDate" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">课程</label>
-              <select id="recordCourse" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                <option value="">选择课程</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
-              <input type="time" id="recordStartTime" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
-              <input type="time" id="recordEndTime" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
-            <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">学习内容</label>
-              <input type="text" id="recordContent" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：第3章-函数入门">
-            </div>
-            <div class="md:col-span-3">
-              <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-all duration-300">
-                <i class="fa fa-save mr-2"></i> 保存记录
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">学习打卡</h3>
+            <!-- 【融合重构】计时器与手动表单不再各干各的，统一为两种打卡模式 -->
+            <div class="flex bg-gray-100 rounded-lg p-1">
+              <button type="button" id="studyEntryModeTimer" class="px-3 py-1 text-sm rounded-md bg-indigo-600 text-white transition-all duration-300">
+                <i class="fa fa-clock-o mr-1"></i>计时打卡
+              </button>
+              <button type="button" id="studyEntryModeManual" class="px-3 py-1 text-sm rounded-md text-gray-600 hover:text-gray-800 transition-all duration-300">
+                <i class="fa fa-pencil mr-1"></i>手动补录
               </button>
             </div>
-          </form>
+          </div>
+
+          <!-- 时间部分 ①：计时打卡 -->
+          <div id="studyTimerSection" class="bg-indigo-50/60 border border-indigo-100 rounded-lg p-4 mb-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <i class="fa fa-hourglass-half text-indigo-500 text-2xl"></i>
+                <div>
+                  <div id="studyTimerDisplay" class="text-3xl font-bold text-indigo-600 font-mono tabular-nums">00:00:00</div>
+                  <span id="studyTimerRunningBadge" class="hidden inline-block mt-1 bg-green-100 text-green-600 text-xs px-2 py-0.5 rounded-full animate-pulse">计时中</span>
+                </div>
+              </div>
+              <button type="button" id="studyTimerBtn" class="px-5 py-2.5 rounded-lg text-white text-sm font-medium bg-green-500 hover:bg-green-600 transition-all duration-300">
+                <i class="fa fa-play mr-1"></i>开始学习
+              </button>
+            </div>
+            <!-- 计时结束后的成果条：本次起止与时长一目了然 -->
+            <div id="studyTimerResult" class="hidden mt-3 pt-3 border-t border-indigo-100 text-sm text-gray-700">
+              <i class="fa fa-check-circle text-green-500 mr-1"></i>
+              已记录本次学习：<span id="studyTimerResultText" class="font-semibold text-indigo-600"></span>，选好课程和内容后点下方保存。
+            </div>
+          </div>
+
+          <!-- 时间部分 ②：手动补录（默认隐藏） -->
+          <div id="studyManualSection" class="hidden mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                <input type="date" id="recordDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
+                <input type="time" id="recordStartTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
+                <input type="time" id="recordEndTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="block text-sm font-medium text-gray-700 mb-1">本次时长</label>
+              <!-- 根据开始/结束时间实时计算，跨零点自动标注 -->
+              <div id="recordDurationPreview" class="px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-md text-sm text-indigo-700 font-medium">—</div>
+            </div>
+          </div>
+
+          <!-- 两种模式共用：课程 + 学习内容 + 保存 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">课程</label>
+              <select id="recordCourse" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="">选择课程</option>
+              </select>
+              <!-- 没有进行中的课程时给出引导，避免下拉空白让人摸不着头脑 -->
+              <div id="recordCourseEmptyHint" class="hidden mt-1 text-xs text-amber-600">
+                <i class="fa fa-exclamation-circle mr-1"></i>还没有进行中的课程，
+                <button type="button" id="goToAddCourseBtn" class="underline font-medium hover:text-amber-700">去添加课程</button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">学习内容</label>
+              <input type="text" id="recordContent" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：中药二 第3章 理气药">
+            </div>
+          </div>
+          <button type="button" id="studyRecordSaveBtn" class="w-full bg-indigo-600 text-white py-2.5 px-4 rounded-lg hover:bg-indigo-700 transition-all duration-300">
+            <i class="fa fa-save mr-2"></i>保存学习记录
+          </button>
         </div>
 
         <!-- 学习记录列表 -->
@@ -6815,6 +6844,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
   <!-- 学习管理脚本 -->
   <script>
+    // 【时区修复】本地日期字符串（YYYY-MM-DD）。
+    // 原代码多处用 toISOString().split('T')[0]，那是 UTC 日期：
+    // 本地 0~8 点之间会得到「昨天」，导致默认日期、今日/本月标记、图表日期整体错位。
+    function getLocalDateStr(date) {
+      const d = date instanceof Date ? date : new Date(date);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
     // 学习管理数据
     const studyData = {
       plans: [],
@@ -6854,8 +6894,21 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       // 确保数据结构的完整性
       studyData.plans = Array.isArray(savedData.plans) ? savedData.plans : [];
-      studyData.courses = Array.isArray(savedData.courses) ? savedData.courses : [];
-      studyData.records = Array.isArray(savedData.records) ? savedData.records : [];
+      // 【容错修复】课程数字字段做类型兜底，避免字符串/缺失值让进度计算变成 NaN
+      studyData.courses = (Array.isArray(savedData.courses) ? savedData.courses : []).map(c => {
+        if (c && typeof c === 'object') {
+          if (typeof c.totalLessons !== 'number' || !isFinite(c.totalLessons)) c.totalLessons = Number(c.totalLessons) || 0;
+          if (typeof c.completedLessons !== 'number' || !isFinite(c.completedLessons)) c.completedLessons = Number(c.completedLessons) || 0;
+          if (typeof c.progress !== 'number' || !isFinite(c.progress)) c.progress = Number(c.progress) || 0;
+        }
+        return c;
+      });
+      // 【容错修复】过滤脏记录：duration/date 异常会让时长累加变成 NaN 或字符串拼接
+      studyData.records = (Array.isArray(savedData.records) ? savedData.records : []).filter(r =>
+        r && typeof r === 'object'
+        && typeof r.date === 'string' && !isNaN(new Date(r.date).getTime())
+        && typeof r.duration === 'number' && isFinite(r.duration) && r.duration >= 0
+      );
       studyData.monthlyPlans = Array.isArray(savedData.monthlyPlans) ? savedData.monthlyPlans : [];
       studyData.weeklyPlans = Array.isArray(savedData.weeklyPlans) ? savedData.weeklyPlans : [];
       // 【XSS 修复】加载时也清理 id：既防止 onclick 注入，也净化历史遗留的脏 id
@@ -6925,9 +6978,23 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
 
 
-      // 添加学习记录
-      document.getElementById('addStudyRecordForm')?.addEventListener('submit', addStudyRecord);
+      // 学习打卡（融合模块）：模式切换 + 统一保存入口
+      document.getElementById('studyEntryModeTimer')?.addEventListener('click', () => switchStudyEntryMode('timer'));
+      document.getElementById('studyEntryModeManual')?.addEventListener('click', () => switchStudyEntryMode('manual'));
+      document.getElementById('studyRecordSaveBtn')?.addEventListener('click', submitStudyRecord);
       document.getElementById('quickLogBtn')?.addEventListener('click', () => switchStudyTab('records'));
+
+      // 【表单改进】起止时间变化时实时刷新「本次时长」预览
+      ['recordStartTime', 'recordEndTime'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updateRecordDurationPreview);
+        document.getElementById(id)?.addEventListener('change', updateRecordDurationPreview);
+      });
+      // 【表单改进】没有课程时的引导按钮 → 跳到「我的课程」标签页
+      document.getElementById('goToAddCourseBtn')?.addEventListener('click', () => {
+        document.getElementById('study-courses-tab')?.click();
+      });
+      // 【计时器】开始/结束学习一键切换
+      document.getElementById('studyTimerBtn')?.addEventListener('click', toggleStudyTimer);
 
       // 课程筛选
       document.querySelectorAll('.course-filter').forEach(btn => {
@@ -6967,8 +7034,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
 
       // 初始化日期选择器为今天
-      const today = new Date();
-      document.getElementById('recordDate').value = today.toISOString().split('T')[0];
+      const today = getLocalDateStr(new Date());
+      document.getElementById('recordDate').value = today;
 
       // 初始化开始时间为当前时间，结束时间为当前时间+1小时
       const now = new Date();
@@ -6983,6 +7050,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       document.getElementById('recordStartTime').value = formatTime(now);
       document.getElementById('recordEndTime').value = formatTime(endTime);
+      updateRecordDurationPreview(); // 【表单改进】初始默认时间下也显示时长
+      restoreStudyTimer(); // 【计时器】恢复上次未结束的计时（刷新不丢）
 
       updateCourseSelect();
       updateRecordMonthFilter(); // 初始化月份筛选器
@@ -7198,6 +7267,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const id = document.getElementById('monthlyPlanId').value;
       const year = parseInt(document.getElementById('monthlyPlanYear').value);
       const month = parseInt(document.getElementById('monthlyPlanMonth').value);
+
+      // 【输入校验】目标学习时长必须是有效正数，否则进度计算会变成 NaN
+      const targetHours = parseFloat(document.getElementById('monthlyPlanTargetHours').value);
+      if (isNaN(targetHours) || targetHours <= 0) {
+        alert('请输入有效的目标学习时长（大于 0 的数字）。');
+        return;
+      }
       
       // 检查是否存在相同年月的月计划
       const existingPlan = studyData.monthlyPlans.find(p => 
@@ -7218,7 +7294,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         year: year,
         month: month,
         goal: document.getElementById('monthlyPlanGoal').value,
-        targetHours: parseFloat(document.getElementById('monthlyPlanTargetHours').value),
+        targetHours: targetHours,
         courseId: selectedCourses.length > 0 ? selectedCourses[0] : null,
         courseIds: selectedCourses,
         createdAt: new Date().toISOString(),
@@ -7235,22 +7311,37 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         studyData.monthlyPlans.push(planData);
       }
 
-      await saveStudyData();
+      const saved = await saveStudyData();
+      if (!saved) {
+        // 【数据安全修复】云端写入失败：以云端数据为准回滚内存，保留弹窗方便重试
+        await loadStudyData();
+        renderMonthlyPlans();
+        AppHelper.showNotification('保存失败', '云端写入未成功，本次修改未保存。请检查网络后重试。', 'error');
+        return;
+      }
       AppHelper.closeModal('monthlyPlanModal');
       renderMonthlyPlans();
-      showNotification('成功', '月计划已保存', 'success');
+      AppHelper.showNotification('成功', '月计划已保存', 'success');
     }
 
     async function deleteMonthlyPlan(planId) {
       if (confirm('确定要删除这个月计划吗？这将同时删除所有关联的周计划。')) {
         // 删除关联的周计划
         studyData.weeklyPlans = studyData.weeklyPlans.filter(p => p.monthId !== planId);
-        
+
         // 删除月计划
         studyData.monthlyPlans = studyData.monthlyPlans.filter(p => p.id !== planId);
-        
-        await saveStudyData();
+
+        const saved = await saveStudyData();
+        if (!saved) {
+          // 【数据安全修复】云端写入失败：以云端数据为准恢复
+          await loadStudyData();
+        }
         renderMonthlyPlans();
+        updateMonthlyPlanLinkCard();
+        if (!saved) {
+          AppHelper.showNotification('删除失败', '云端写入未成功，该计划已恢复。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -7462,7 +7553,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 如果是取消完成，或者进度已达到100%，则允许切换状态
         plan.completed = !plan.completed;
         plan.updatedAt = new Date().toISOString();
-        await saveStudyData();
+        const saved = await saveStudyData();
+        if (!saved) {
+          plan.completed = !plan.completed; // 【数据安全修复】保存失败则回滚状态
+          AppHelper.showNotification('保存失败', '云端写入未成功，状态未变更。请检查网络后重试。', 'error');
+        }
         renderMonthlyPlans();
       }
     }
@@ -7785,19 +7880,28 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         monthId: monthId,
         createdAt: id ? undefined : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        completed: false
+        // 【缺陷修复】编辑周计划时保留原完成状态（原实现强制 completed:false，编辑一次已完成计划就被打回未完成）
+        completed: id ? (studyData.weeklyPlans.find(p => p.id === id)?.completed || false) : false
       };
 
       if (id) {
         const index = studyData.weeklyPlans.findIndex(p => p.id === id);
         if (index !== -1) {
-          studyData.weeklyPlans[index] = { ...planData, createdAt: studyData.weeklyPlans[index].createdAt };
+          studyData.weeklyPlans[index] = { ...studyData.weeklyPlans[index], ...planData, createdAt: studyData.weeklyPlans[index].createdAt };
         }
       } else {
         studyData.weeklyPlans.push(planData);
       }
 
-      await saveStudyData();
+      const saved = await saveStudyData();
+      if (!saved) {
+        // 【数据安全修复】云端写入失败：以云端数据为准回滚内存
+        await loadStudyData();
+        renderWeeklyPlans();
+        updateMonthlyPlanLinkCard();
+        AppHelper.showNotification('保存失败', '云端写入未成功，本次修改未保存。请检查网络后重试。', 'error');
+        return;
+      }
       AppHelper.closeModal('weeklyPlanModal');
       renderWeeklyPlans();
       updateMonthlyPlanLinkCard();
@@ -7806,8 +7910,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     async function deleteWeeklyPlan(planId) {
       if (confirm('确定要删除这个周计划吗？')) {
         studyData.weeklyPlans = studyData.weeklyPlans.filter(p => p.id !== planId);
-        await saveStudyData();
+        const saved = await saveStudyData();
+        if (!saved) {
+          await loadStudyData(); // 【数据安全修复】以云端数据为准恢复
+        }
         renderWeeklyPlans();
+        updateMonthlyPlanLinkCard();
+        if (!saved) {
+          AppHelper.showNotification('删除失败', '云端写入未成功，该计划已恢复。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -8125,7 +8236,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 如果是取消完成，或者进度已达到100%，则允许切换状态
         plan.completed = !plan.completed;
         plan.updatedAt = new Date().toISOString();
-        await saveStudyData();
+        const saved = await saveStudyData();
+        if (!saved) {
+          plan.completed = !plan.completed; // 【数据安全修复】保存失败则回滚状态
+          AppHelper.showNotification('保存失败', '云端写入未成功，状态未变更。请检查网络后重试。', 'error');
+        }
         renderWeeklyPlans();
       }
     }
@@ -8214,14 +8329,203 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     function updateCourseSelect() {
       const select = document.getElementById('recordCourse');
       if (!select) return;
-      
+
       select.innerHTML = '<option value="">选择课程</option>';
-      studyData.courses.filter(c => c.status === 'active').forEach(course => {
+      const activeCourses = studyData.courses.filter(c => c.status === 'active');
+      activeCourses.forEach(course => {
         const option = document.createElement('option');
         option.value = course.id;
         option.textContent = course.name;
         select.appendChild(option);
       });
+
+      // 【表单改进】没有进行中的课程时：禁用下拉 + 显示引导提示（原先只是空白下拉，用户不知道要先去建课程）
+      const emptyHint = document.getElementById('recordCourseEmptyHint');
+      if (activeCourses.length === 0) {
+        select.innerHTML = '<option value="">暂无进行中的课程</option>';
+        select.disabled = true;
+        if (emptyHint) emptyHint.classList.remove('hidden');
+      } else {
+        select.disabled = false;
+        if (emptyHint) emptyHint.classList.add('hidden');
+      }
+    }
+
+    // 【表单改进】实时显示本次学习时长（输入起止时间即时反馈，支持跨零点）
+    function updateRecordDurationPreview() {
+      const preview = document.getElementById('recordDurationPreview');
+      if (!preview) return;
+
+      const startTime = document.getElementById('recordStartTime').value;
+      const endTime = document.getElementById('recordEndTime').value;
+      if (!startTime || !endTime) {
+        preview.textContent = '—';
+        return;
+      }
+
+      const toMinutes = (s) => parseInt(s.split(':')[0]) * 60 + parseInt(s.split(':')[1]);
+      let minutes = toMinutes(endTime) - toMinutes(startTime);
+
+      if (minutes === 0) {
+        preview.textContent = '结束时间与开始时间相同';
+        preview.classList.add('text-amber-600');
+        return;
+      }
+      preview.classList.remove('text-amber-600');
+
+      // 结束时间小于开始时间：视为跨零点（如 23:30 → 00:30 记为 60 分钟）
+      let crossMidnight = false;
+      if (minutes < 0) {
+        minutes += 1440;
+        crossMidnight = true;
+      }
+
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      const durText = h > 0 ? `${h} 小时 ${m} 分钟` : `${m} 分钟`;
+      preview.textContent = crossMidnight ? `${durText}（跨零点）` : durText;
+    }
+
+    // ===== 学习计时器 =====
+    // 【计时器】开始学习时记录时间点，结束学习时自动把起止时间填进表单。
+    // 开始时间写入 localStorage，页面刷新/误关不丢计时。
+    const STUDY_TIMER_KEY = 'studyTimerStart';
+    let studyTimerStart = null;
+    let studyTimerInterval = null;
+
+    function formatStudyTimerElapsed(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+      const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+      const s = (totalSeconds % 60).toString().padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
+
+    function resetStudyTimerUI() {
+      const btn = document.getElementById('studyTimerBtn');
+      const display = document.getElementById('studyTimerDisplay');
+      const badge = document.getElementById('studyTimerRunningBadge');
+      if (btn) {
+        btn.innerHTML = '<i class="fa fa-play mr-1"></i>开始学习';
+        btn.classList.remove('bg-red-500', 'hover:bg-red-600');
+        btn.classList.add('bg-green-500', 'hover:bg-green-600');
+      }
+      if (display) display.textContent = '00:00:00';
+      if (badge) badge.classList.add('hidden');
+    }
+
+    function startStudyTimerUI() {
+      const btn = document.getElementById('studyTimerBtn');
+      const display = document.getElementById('studyTimerDisplay');
+      const badge = document.getElementById('studyTimerRunningBadge');
+      if (!btn) return;
+      btn.innerHTML = '<i class="fa fa-stop mr-1"></i>结束学习';
+      btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+      btn.classList.add('bg-red-500', 'hover:bg-red-600');
+      if (badge) badge.classList.remove('hidden');
+      const tick = () => {
+        if (display) display.textContent = formatStudyTimerElapsed(Date.now() - studyTimerStart);
+      };
+      tick();
+      if (studyTimerInterval) clearInterval(studyTimerInterval);
+      studyTimerInterval = setInterval(tick, 1000);
+    }
+
+    // 页面加载时恢复未结束的计时（防止刷新后计时丢失）
+    function restoreStudyTimer() {
+      const saved = localStorage.getItem(STUDY_TIMER_KEY);
+      if (!saved) return;
+      const start = parseInt(saved);
+      if (!isNaN(start) && start > 0) {
+        studyTimerStart = start;
+        startStudyTimerUI();
+        AppHelper.showNotification('计时已恢复', '检测到上次未结束的学习计时，已继续计时。', 'info');
+      }
+    }
+
+    function toggleStudyTimer() {
+      if (studyTimerStart) {
+        stopStudyTimer();
+      } else {
+        // 开始新一轮计时：收起上一轮结果条（未保存的计时结果作废）
+        studyTimerRecordPending = null;
+        const result = document.getElementById('studyTimerResult');
+        if (result) result.classList.add('hidden');
+        studyTimerStart = Date.now();
+        localStorage.setItem(STUDY_TIMER_KEY, String(studyTimerStart));
+        startStudyTimerUI();
+        AppHelper.showNotification('计时开始', '加油！学完点「结束学习」，再选好课程和内容保存即可。', 'info');
+      }
+    }
+
+    function stopStudyTimer() {
+      if (!studyTimerStart) return;
+      const startDate = new Date(studyTimerStart);
+      const endDate = new Date();
+      const elapsedMinutes = Math.floor((endDate - startDate) / 60000);
+
+      // 先停 UI 和持久化，无论后面走哪条分支计时都算停了
+      if (studyTimerInterval) clearInterval(studyTimerInterval);
+      studyTimerInterval = null;
+      studyTimerStart = null;
+      localStorage.removeItem(STUDY_TIMER_KEY);
+
+      // 超过 24 小时：基本是忘记关计时器了，按天记的起止时间（HH:MM）无法准确表达，
+      // 丢弃本次计时避免写出错误时长
+      if (elapsedMinutes >= 1440) {
+        studyTimerRecordPending = null;
+        resetStudyTimerUI();
+        const result = document.getElementById('studyTimerResult');
+        if (result) result.classList.add('hidden');
+        AppHelper.showNotification('计时时长异常', '本次计时超过 24 小时，疑似忘记关闭，已丢弃本次计时。请切到「手动补录」填写。', 'error');
+        return;
+      }
+
+      const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const fmtTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+      // 不足 1 分钟时结束时间借位一分钟，避免「结束=开始」无法表达
+      if (fmtTime(endDate) === fmtTime(startDate)) {
+        endDate.setMinutes(endDate.getMinutes() + 1);
+      }
+
+      const crossMidnight = fmtDate(endDate) !== fmtDate(startDate);
+      const durationMinutes = Math.max(elapsedMinutes, 1);
+
+      // 【融合重构】不再跳去填下方表单：暂存计时结果并在计时区内直接出结果条，
+      // 选好课程和内容后原地保存（共用 submitStudyRecord 管线）
+      studyTimerRecordPending = {
+        dateStr: fmtDate(startDate), // 学习日期取「开始学习」那天
+        startTimeStr: fmtTime(startDate),
+        endTimeStr: fmtTime(endDate),
+        durationMinutes,
+        crossMidnight
+      };
+
+      // 按钮恢复为「开始学习」，计时显示保留本次结果
+      const btn = document.getElementById('studyTimerBtn');
+      if (btn) {
+        btn.innerHTML = '<i class="fa fa-play mr-1"></i>开始学习';
+        btn.classList.remove('bg-red-500', 'hover:bg-red-600');
+        btn.classList.add('bg-green-500', 'hover:bg-green-600');
+      }
+      const badge = document.getElementById('studyTimerRunningBadge');
+      if (badge) badge.classList.add('hidden');
+
+      const h = Math.floor(durationMinutes / 60);
+      const m = durationMinutes % 60;
+      const durText = h > 0 ? `${h} 小时 ${m} 分钟` : `${m} 分钟`;
+      const resultText = document.getElementById('studyTimerResultText');
+      if (resultText) {
+        resultText.textContent = `${studyTimerRecordPending.dateStr} ${studyTimerRecordPending.startTimeStr} → ${studyTimerRecordPending.endTimeStr} · ${durText}${crossMidnight ? '（跨零点）' : ''}`;
+      }
+      const result = document.getElementById('studyTimerResult');
+      if (result) result.classList.remove('hidden');
+
+      AppHelper.showNotification('计时结束', `本次学习 ${durText}，选好课程和内容后点「保存学习记录」。`, 'success');
+
+      // 光标聚焦到学习内容，顺手填完就保存
+      document.getElementById('recordContent')?.focus();
     }
 
     // 更新首页的「年度学习时长」（唯一计算入口，模块内其它地方复用它的返回值）
@@ -8390,7 +8694,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         studyData.plans.push(planData);
       }
 
-      await saveStudyData();
+      const saved = await saveStudyData();
+      if (!saved) {
+        // 【数据安全修复】云端写入失败：以云端数据为准回滚内存
+        await loadStudyData();
+        renderStudyPlans();
+        updateStudyDashboard();
+        AppHelper.showNotification('保存失败', '云端写入未成功，本次修改未保存。请检查网络后重试。', 'error');
+        return;
+      }
       closeModal('addStudyPlanModal');
       renderStudyPlans();
       updateStudyDashboard();
@@ -8399,8 +8711,14 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     async function deleteStudyPlan(id) {
       if (confirm('确定要删除这个学习计划吗？')) {
         studyData.plans = studyData.plans.filter(p => p.id !== id);
-        await saveStudyData();
+        const saved = await saveStudyData();
+        if (!saved) {
+          await loadStudyData(); // 【数据安全修复】以云端数据为准恢复
+        }
         renderStudyPlans();
+        if (!saved) {
+          AppHelper.showNotification('删除失败', '云端写入未成功，该计划已恢复。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -8538,23 +8856,39 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         studyData.courses.push(courseData);
       }
 
-      await saveStudyData();
+      const saved = await saveStudyData();
+      if (!saved) {
+        // 【数据安全修复】云端写入失败：以云端数据为准回滚内存
+        await loadStudyData();
+        renderCourses();
+        updateStudyDashboard();
+        updateStudyCharts();
+        updateCourseYearFilter();
+        AppHelper.showNotification('保存失败', '云端写入未成功，本次修改未保存。请检查网络后重试。', 'error');
+        return;
+      }
       closeModal('addCourseModal');
       renderCourses();
       updateStudyDashboard();
       updateStudyCharts();
       updateCourseYearFilter();
-      showNotification('成功', id ? '课程已更新' : '课程已添加', 'success');
+      AppHelper.showNotification('成功', id ? '课程已更新' : '课程已添加', 'success');
     }
 
     async function deleteCourse(id) {
       if (confirm('确定要删除这个课程吗？')) {
         studyData.courses = studyData.courses.filter(c => c.id !== id);
-        await saveStudyData();
+        const saved = await saveStudyData();
+        if (!saved) {
+          await loadStudyData(); // 【数据安全修复】以云端数据为准恢复
+        }
         renderCourses();
         updateCourseYearFilter();
         updateStudyDashboard();
         updateStudyCharts();
+        if (!saved) {
+          AppHelper.showNotification('删除失败', '云端写入未成功，该课程已恢复。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -8744,86 +9078,179 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
     }
 
-    // 学习记录相关函数
-    async function addStudyRecord(e) {
-      e.preventDefault();
-      
-      const startTime = document.getElementById('recordStartTime').value;
-      const endTime = document.getElementById('recordEndTime').value;
-      
-      // 验证结束时间必须晚于开始时间
-      if (startTime >= endTime) {
-        AppHelper.showNotification('错误', '结束时间必须晚于开始时间', 'error');
-        return;
-      }
-      
-      // 计算时长（分钟）
-      const startParts = startTime.split(':');
-      const endParts = endTime.split(':');
-      const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
-      const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
-      const duration = endMinutes - startMinutes;
-      
-      const recordData = {
-        id: Date.now().toString(),
-        courseId: document.getElementById('recordCourse').value,
-        date: document.getElementById('recordDate').value,
-        startTime: startTime,
-        endTime: endTime,
-        duration: duration,
-        content: document.getElementById('recordContent').value,
-        note: document.getElementById('recordNote')?.value || '',
-        createdAt: new Date().toISOString()
-      };
+    // ===== 学习打卡（计时打卡 + 手动补录融合） =====
+    // 【融合重构】原「学习计时器」和「添加学习记录表单」各干各的：
+    // 现统一为一个模块——两种模式共用课程/学习内容/保存按钮和同一条保存管线；
+    // 计时结束后不再「跳下去填表单」，而是在计时区内直接出结果条，原地保存。
 
+    // 当前打卡模式：'timer' 计时打卡 | 'manual' 手动补录
+    let studyEntryMode = 'timer';
+
+    // 计时模式：结束学习后暂存的本次计时结果，等待选课程/内容后保存
+    let studyTimerRecordPending = null;
+
+    function switchStudyEntryMode(mode) {
+      studyEntryMode = mode;
+      const timerBtn = document.getElementById('studyEntryModeTimer');
+      const manualBtn = document.getElementById('studyEntryModeManual');
+      const timerSection = document.getElementById('studyTimerSection');
+      const manualSection = document.getElementById('studyManualSection');
+      if (!timerBtn || !manualBtn || !timerSection || !manualSection) return;
+
+      if (mode === 'timer') {
+        timerBtn.classList.add('bg-indigo-600', 'text-white');
+        timerBtn.classList.remove('text-gray-600');
+        manualBtn.classList.remove('bg-indigo-600', 'text-white');
+        manualBtn.classList.add('text-gray-600');
+        timerSection.classList.remove('hidden');
+        manualSection.classList.add('hidden');
+      } else {
+        manualBtn.classList.add('bg-indigo-600', 'text-white');
+        manualBtn.classList.remove('text-gray-600');
+        timerBtn.classList.remove('bg-indigo-600', 'text-white');
+        timerBtn.classList.add('text-gray-600');
+        timerSection.classList.add('hidden');
+        manualSection.classList.remove('hidden');
+        updateRecordDurationPreview();
+      }
+    }
+
+    // 【重构】保存学习记录的公共收尾：入队、课程进度累加、云端保存、失败回滚、界面刷新。
+    // 计时打卡和手动补录都走这里，杜绝两套保存逻辑
+    async function finalizeStudyRecord(recordData) {
       studyData.records.push(recordData);
 
       // 更新对应课程的已完成课时和进度
-      const courseId = recordData.courseId;
-      const course = studyData.courses.find(c => c.id === courseId);
+      const course = studyData.courses.find(c => c.id === recordData.courseId);
       if (course) {
-        // 将分钟转换为小时（保留一位小数）
+        // 将分钟转换为小时（保留一位小数）后累加已完成课时
         const durationInHours = recordData.duration / 60;
-        // 累加已完成课时（以小时为单位）
         course.completedLessons = parseFloat(((course.completedLessons || 0) + durationInHours).toFixed(1));
-        // 计算进度百分比
         if (course.totalLessons > 0) {
           course.progress = Math.min(Math.round((course.completedLessons / course.totalLessons) * 100), 100);
         }
       }
 
-      await saveStudyData();
-
-      // 重置表单
-      document.getElementById('addStudyRecordForm').reset();
-      // 重新设置日期为今天
-      const today = new Date();
-      document.getElementById('recordDate').value = today.toISOString().split('T')[0];
-
-      // 重新设置默认时间（开始时间为当前时间，结束时间为当前时间+1小时）
-      const now = new Date();
-      const endDateTime = new Date(now.getTime() + 60 * 60 * 1000); // +1小时
-
-      // 格式化时间为 HH:MM
-      const formatTime = (date) => {
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        return `${hours}:${minutes}`;
+      const saved = await saveStudyData();
+      const refresh = () => {
+        renderStudyRecords();
+        renderRecentStudyRecords();
+        renderCourses();
+        renderWeeklyPlans();
+        renderMonthlyPlans();
+        updateStudyDashboard();
+        updateStudyCharts();
       };
 
-      document.getElementById('recordStartTime').value = formatTime(now);
-      document.getElementById('recordEndTime').value = formatTime(endDateTime);
+      if (!saved) {
+        // 【数据安全修复】保存失败：以云端为准回滚内存（含课程进度），保留输入内容便于重试
+        await loadStudyData();
+        refresh();
+        AppHelper.showNotification('保存失败', '云端写入未成功，本次记录未保存。请检查网络后重试，内容已为你保留。', 'error');
+        return false;
+      }
 
-      renderStudyRecords();
-      renderRecentStudyRecords();
-      renderCourses(); // 重新渲染课程列表以更新进度
-      renderWeeklyPlans(); // 重新渲染周度学习计划以更新进度
-      renderMonthlyPlans(); // 重新渲染月度学习计划以更新进度
-      updateStudyDashboard();
-      updateStudyCharts();
-      updateRecordMonthFilter(); // 更新月份筛选器
-      
-      AppHelper.showNotification('成功', '学习记录已添加', 'success');
+      refresh();
+      updateRecordMonthFilter();
+      return true;
+    }
+
+    // 统一保存入口：按当前模式收集时间信息，校验后入库
+    async function submitStudyRecord() {
+      // 计时还在跑？先结束计时再保存，一气呵成
+      if (studyTimerStart) {
+        stopStudyTimer();
+      }
+
+      let dateStr, startTimeStr, endTimeStr, duration, crossMidnight;
+
+      if (studyEntryMode === 'timer') {
+        // 计时模式：时间来自计时结果
+        if (!studyTimerRecordPending) {
+          AppHelper.showNotification('提示', '还没有计时记录：先点「开始学习」，学完点「结束学习」。', 'info');
+          return;
+        }
+        ({ dateStr, startTimeStr, endTimeStr, durationMinutes: duration, crossMidnight } = studyTimerRecordPending);
+      } else {
+        // 手动模式：时间来自表单输入
+        const startTime = document.getElementById('recordStartTime').value;
+        const endTime = document.getElementById('recordEndTime').value;
+        dateStr = document.getElementById('recordDate').value;
+        if (!dateStr) {
+          AppHelper.showNotification('提示', '请选择日期。', 'error');
+          return;
+        }
+        if (!startTime || !endTime) {
+          AppHelper.showNotification('提示', '请填写开始和结束时间。', 'error');
+          return;
+        }
+        const toMinutes = (s) => parseInt(s.split(':')[0]) * 60 + parseInt(s.split(':')[1]);
+        duration = toMinutes(endTime) - toMinutes(startTime);
+        crossMidnight = false;
+        if (duration === 0) {
+          AppHelper.showNotification('错误', '结束时间不能与开始时间相同。', 'error');
+          return;
+        }
+        // 跨零点学习（如 23:30 → 00:30）：结束时间早于开始时间时记为次日
+        if (duration < 0) {
+          duration += 1440;
+          crossMidnight = true;
+        }
+        startTimeStr = startTime;
+        endTimeStr = endTime;
+      }
+
+      // 两种模式共用的校验
+      const courseId = document.getElementById('recordCourse').value;
+      if (!courseId) {
+        AppHelper.showNotification('提示', '请先选择课程；还没有课程的话，先去「我的课程」添加。', 'error');
+        return;
+      }
+      const content = document.getElementById('recordContent').value.trim();
+      if (!content) {
+        AppHelper.showNotification('提示', '请填写学习内容，比如「中药二 第3章 理气药」。', 'error');
+        return;
+      }
+
+      const recordData = {
+        id: Date.now().toString(),
+        courseId,
+        date: dateStr,
+        startTime: startTimeStr,
+        endTime: endTimeStr,
+        duration: duration,
+        crossMidnight: crossMidnight,
+        content: content,
+        createdAt: new Date().toISOString()
+      };
+
+      const ok = await finalizeStudyRecord(recordData);
+      if (!ok) return;
+
+      AppHelper.showNotification('成功', '学习记录已保存，今天也很棒！', 'success');
+
+      // 保存成功：清空内容、保留课程（连续打卡通常还是同一门课），时间区回到初始状态
+      document.getElementById('recordContent').value = '';
+      if (studyEntryMode === 'timer') {
+        studyTimerRecordPending = null;
+        const result = document.getElementById('studyTimerResult');
+        if (result) result.classList.add('hidden');
+        const display = document.getElementById('studyTimerDisplay');
+        if (display && !studyTimerStart) display.textContent = '00:00:00';
+      } else {
+        resetManualTimeInputs();
+      }
+    }
+
+    // 手动模式的时间输入重置为当前默认（今天 / 现在 / 现在+1小时）
+    function resetManualTimeInputs() {
+      const now = new Date();
+      const endDateTime = new Date(now.getTime() + 60 * 60 * 1000);
+      const fmtTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      document.getElementById('recordDate').value = getLocalDateStr(now);
+      document.getElementById('recordStartTime').value = fmtTime(now);
+      document.getElementById('recordEndTime').value = fmtTime(endDateTime);
+      updateRecordDurationPreview();
     }
 
     // 更新学习记录年份和月份筛选器
@@ -8902,7 +9329,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           }
         }
 
-        await saveStudyData();
+        const saved = await saveStudyData();
+        if (!saved) {
+          await loadStudyData(); // 【数据安全修复】以云端数据为准恢复（含课程进度）
+        }
         renderStudyRecords();
         renderRecentStudyRecords();
         renderCourses(); // 重新渲染课程列表以更新进度
@@ -8910,6 +9340,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         renderMonthlyPlans(); // 重新渲染月度学习计划以更新进度
         updateStudyDashboard();
         updateStudyCharts();
+        if (!saved) {
+          AppHelper.showNotification('删除失败', '云端写入未成功，该记录已恢复。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -8987,7 +9420,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const now = new Date();
       const currentYear = now.getFullYear().toString();
       const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
-      const currentDate = now.toISOString().split('T')[0];
+      const currentDate = getLocalDateStr(now);
       
       // 按月份倒序
       Object.keys(groupedRecords).sort((a, b) => b.localeCompare(a)).forEach(monthKey => {
@@ -9073,6 +9506,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                   <span>${record.startTime || '--:--'}</span>
                   <i class="fa fa-arrow-right text-gray-400"></i>
                   <span>${record.endTime || '--:--'}</span>
+                  ${record.crossMidnight ? '<span class="bg-amber-100 text-amber-600 text-[10px] px-1.5 py-0.5 rounded-full">跨零点</span>' : ''}
                   <i class="fa fa-stop-circle text-indigo-500"></i>
                   <span class="font-bold text-indigo-600 ml-auto">${record.duration}分钟</span>
                 </div>
@@ -9084,13 +9518,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                       <i class="fa fa-pencil text-gray-400 mt-0.5"></i>
                       <span>${esc(record.content)}</span>
                     </div>
-                  </div>
-                ` : ''}
-                
-                <!-- 备注 -->
-                ${record.note ? `
-                  <div class="text-xs text-gray-400 mt-1">
-                    <i class="fa fa-sticky-note mr-1"></i>${esc(record.note)}
                   </div>
                 ` : ''}
               </div>
@@ -9234,7 +9661,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 初始化今日学习时长图表
       const todayStudyCtx = document.getElementById('todayStudyChart')?.getContext('2d');
       if (todayStudyCtx) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateStr(new Date());
         const courseColors = [
           { bg: 'rgba(79, 70, 229, 0.9)', border: '#4f46e5', gradient: ['#6366f1', '#4f46e5'] },
           { bg: 'rgba(16, 185, 129, 0.9)', border: '#10b981', gradient: ['#34d399', '#10b981'] },
@@ -9357,7 +9784,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         for (let i = 0; i < 7; i++) {
           const date = new Date(monday);
           date.setDate(monday.getDate() + i);
-          const dateStr = date.toISOString().split('T')[0];
+          const dateStr = getLocalDateStr(date);
           const dayName = dayNames[date.getDay()];
           labels.push(dayName);
           
@@ -9369,7 +9796,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 30天显示日期
         for (let i = days - 1; i >= 0; i--) {
           const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          const dateStr = date.toISOString().split('T')[0];
+          const dateStr = getLocalDateStr(date);
           labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
           
           const dayRecords = studyData.records.filter(r => r.date === dateStr);
@@ -9469,7 +9896,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateStr(date);
         const dayRecords = studyData.records.filter(r => r.date === dateStr);
         
         dayRecords.forEach(record => {
@@ -9550,7 +9977,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 更新打卡圆点
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateStr(date);
         const dayRecords = studyData.records.filter(r => r.date === dateStr);
         const hasStudy = dayRecords.length > 0 && dayRecords.reduce((sum, r) => sum + r.duration, 0) > 0;
         
@@ -9608,7 +10035,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateStr(date);
         const dayRecords = studyData.records.filter(r => r.date === dateStr);
         
         if (dayRecords.length > 0) {
@@ -9665,7 +10092,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       updateStudyTimeChart(7);
 
       if (todayStudyChart) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateStr(new Date());
         const courseColors = [
           { bg: 'rgba(79, 70, 229, 0.9)', border: '#4f46e5', gradient: ['#6366f1', '#4f46e5'] },
           { bg: 'rgba(16, 185, 129, 0.9)', border: '#10b981', gradient: ['#34d399', '#10b981'] },
@@ -9833,8 +10260,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 更新最后学习时间
       if (lastStudyTime && recentRecords[0]) {
         const lastDate = recentRecords[0].date;
-        const today = new Date().toISOString().split('T')[0];
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        const today = getLocalDateStr(new Date());
+        const yesterday = getLocalDateStr(new Date(Date.now() - 86400000));
         
         if (lastDate === today) {
           lastStudyTime.textContent = '今天';
@@ -9981,7 +10408,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
 
       // 确保数据结构的完整性
-      houseworkData.tasks = Array.isArray(savedData.tasks) ? savedData.tasks : [];
+      // 【容错修复】任务必须含字符串 title，否则渲染层的 toLowerCase() 会直接崩溃
+      houseworkData.tasks = (Array.isArray(savedData.tasks) ? savedData.tasks : []).filter(t =>
+        t && typeof t === 'object' && typeof t.title === 'string'
+      );
       houseworkData.types = Array.isArray(savedData.types) ? savedData.types : [];
       // 【XSS 修复】加载时也清理 id，防止 onclick / data-* 属性注入
       AppHelper.sanitizeIds('houseworkData', houseworkData);
@@ -10182,7 +10612,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       if (completedTasks.length === 0) return 0;
 
-      const dates = [...new Set(completedTasks.map(t => t.completedAt.split('T')[0]))].sort().reverse();
+      // 【时区修复】completedAt 可能是 UTC ISO 或本地格式，统一转本地日期再比较
+      const dates = [...new Set(completedTasks.map(t => getLocalDateStr(t.completedAt)))].sort().reverse();
       let streak = 0;
       let currentDate = new Date();
       
@@ -10320,11 +10751,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         id: id || Date.now().toString(),
         title: document.getElementById('houseworkTitle').value,
         description: document.getElementById('houseworkDescription').value,
-        dueDate: dueDate ? dueDate.replace('T', ' ') : new Date().toISOString().slice(0, 16).replace('T', ' '), // 精确到分钟
+        dueDate: dueDate ? dueDate.replace('T', ' ') : getLocalISOString(new Date()).slice(0, 16).replace('T', ' '), // 【时区修复】精确到分钟，本地时间
         priority: document.getElementById('houseworkPriority').value,
         type: document.getElementById('houseworkType').value,
         status: id ? houseworkData.tasks.find(t => t.id === id)?.status : 'pending', // 编辑时保留原状态，新建时默认为待办
-        createdAt: createdAt ? createdAt.replace('T', ' ') : new Date().toISOString().slice(0, 16).replace('T', ' '), // 精确到分钟
+        createdAt: createdAt ? createdAt.replace('T', ' ') : getLocalISOString(new Date()).slice(0, 16).replace('T', ' '), // 【时区修复】精确到分钟，本地时间
         completedAt: id ? houseworkData.tasks.find(t => t.id === id)?.completedAt : null
       };
 
@@ -10339,7 +10770,21 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         houseworkData.tasks.push(newTaskData);
       }
 
-      await saveHouseworkData();
+      const saved = await saveHouseworkData();
+      if (!saved) {
+        // 【数据安全修复】云端写入失败：以云端数据为准回滚内存，保留弹窗方便重试
+        await loadHouseworkData();
+        updateHouseworkDashboard();
+        renderPendingHousework();
+        renderInProgressHousework();
+        renderCompletedHousework();
+        renderOverdueHousework();
+        renderRecentHousework();
+        updateHouseworkStatistics();
+        updateHomeHouseworkStreak();
+        AppHelper.showNotification('保存失败', '云端写入未成功，本次修改未保存。请检查网络后重试。', 'error');
+        return;
+      }
       closeHouseworkModal('addHouseworkModal');
       
       // 更新所有相关数据
@@ -10361,7 +10806,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     async function deleteHousework(id) {
       if (confirm('确定要删除这个家务吗？')) {
         houseworkData.tasks = houseworkData.tasks.filter(t => t.id !== id);
-        await saveHouseworkData();
+        const saved = await saveHouseworkData();
+        if (!saved) {
+          await loadHouseworkData(); // 【数据安全修复】以云端数据为准恢复
+        }
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -10372,6 +10820,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
         // 更新首页的家务连续完成天数
         updateHomeHouseworkStreak();
+
+        if (!saved) {
+          AppHelper.showNotification('删除失败', '云端写入未成功，该家务已恢复。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -10380,7 +10832,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const task = houseworkData.tasks.find(t => t.id === id);
       if (task && task.status === 'pending') {
         task.status = 'in-progress';
-        await saveHouseworkData();
+        const saved = await saveHouseworkData();
+        if (!saved) {
+          task.status = 'pending'; // 【数据安全修复】保存失败则回滚状态
+        }
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -10391,7 +10846,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 更新首页的家务连续完成天数
         updateHomeHouseworkStreak();
 
-        AppHelper.showNotification('成功', '家务已开始进行', 'success');
+        if (saved) {
+          AppHelper.showNotification('成功', '家务已开始进行', 'success');
+        } else {
+          AppHelper.showNotification('保存失败', '云端写入未成功，状态未变更。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -10400,8 +10859,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const task = houseworkData.tasks.find(t => t.id === id);
       if (task && task.status === 'in-progress') {
         task.status = 'completed';
-        task.completedAt = new Date().toISOString();
-        await saveHouseworkData();
+        // 【时区修复】completedAt 与 createdAt 统一用本地时间格式（原来是 UTC ISO，凌晨完成会算到前一天）
+        task.completedAt = getLocalISOString(new Date());
+        const saved = await saveHouseworkData();
+        if (!saved) {
+          task.status = 'in-progress'; // 【数据安全修复】保存失败则回滚
+          task.completedAt = null;
+        }
         updateHouseworkDashboard();
         renderPendingHousework();
         renderInProgressHousework();
@@ -10413,7 +10877,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 更新首页的家务连续完成天数
         updateHomeHouseworkStreak();
 
-        AppHelper.showNotification('成功', '家务已完成', 'success');
+        if (saved) {
+          AppHelper.showNotification('成功', '家务已完成', 'success');
+        } else {
+          AppHelper.showNotification('保存失败', '云端写入未成功，状态未变更。请检查网络后重试。', 'error');
+        }
       }
     }
 
@@ -10502,7 +10970,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       filteredTasks.forEach(task => {
         if (!task.completedAt) return;
 
-        const date = task.completedAt.split('T')[0]; // 提取日期部分 YYYY-MM-DD
+        const date = getLocalDateStr(task.completedAt); // 本地日期（completedAt 可能是 UTC ISO 或本地格式）
         const [year, month] = date.split('-');
         const monthKey = `${year}-${month}`;
 
@@ -10550,7 +11018,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const now = new Date();
       const currentYear = now.getFullYear().toString();
       const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
-      const currentDate = now.toISOString().split('T')[0];
+      const currentDate = getLocalDateStr(now);
 
       // 按月份倒序
       Object.keys(groupedTasks).sort((a, b) => b.localeCompare(a)).forEach(monthKey => {
@@ -10804,7 +11272,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               </div>
               <div class="flex-1">
                 <div class="flex items-center gap-2 mb-2">
-                  <h4 class="text-lg font-semibold ${colors.text}">${task.title}</h4>
+                  <h4 class="text-lg font-semibold ${colors.text}">${esc(task.title)}</h4>
                   <span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
                     <i class="fa fa-clock-o mr-1"></i>${daysOverdue}
                   </span>
@@ -10818,7 +11286,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <div class="flex items-center text-xs text-gray-500 mt-2 space-x-4">
                   ${task.createdAt ? `<span><i class="fa fa-clock-o mr-1"></i>创建: ${task.createdAt}</span>` : ''}
                   ${task.dueDate ? `<span class="text-red-500"><i class="fa fa-calendar mr-1"></i>截止: ${task.dueDate}</span>` : ''}
-                  ${task.assignee ? `<span><i class="fa fa-user mr-1"></i>${task.assignee}</span>` : ''}
+                  ${task.assignee ? `<span><i class="fa fa-user mr-1"></i>${esc(task.assignee)}</span>` : ''}
                 </div>
               </div>
             </div>
@@ -10938,10 +11406,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <i class="fa fa-check-circle text-gray-400 text-lg hover:text-red-500"></i>
               </button>
               <div class="flex-1">
-                <p class="font-medium text-gray-800">${task.title}</p>
+                <p class="font-medium text-gray-800">${esc(task.title)}</p>
                 <p class="text-sm text-gray-500">
                   ${typeNames[task.type] || '其他'} 
-                  ${task.assignee ? `· ${task.assignee}` : ''}
+                  ${task.assignee ? `· ${esc(task.assignee)}` : ''}
                   ${task.createdAt ? `· <i class="fa fa-clock-o mr-1"></i>${task.createdAt}` : ''}
                   ${task.dueDate ? `· <i class="fa fa-calendar mr-1"></i>${task.dueDate}` : ''}
                   ${isOverdue ? '<span class="text-red-600 ml-2"><i class="fa fa-exclamation-triangle mr-1"></i>已逾期</span>' : ''}
@@ -11004,7 +11472,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             <div class="flex items-start flex-1">
               ${deleteButton}
               <div class="flex-1">
-                <h4 class="text-lg font-semibold ${isCompleted ? 'line-through text-gray-400' : colors.text} mb-2">${task.title}</h4>
+                <h4 class="text-lg font-semibold ${isCompleted ? 'line-through text-gray-400' : colors.text} mb-2">${esc(task.title)}</h4>
                 ${task.description ? `<p class="text-gray-600 text-sm mb-3">${esc(task.description)}</p>` : ''}
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                   ${statusBadge[task.status]}
@@ -11015,7 +11483,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 <div class="flex items-center text-xs text-gray-500 mt-2 space-x-4">
                   ${task.createdAt ? `<span><i class="fa fa-clock-o mr-1"></i>创建: ${task.createdAt}</span>` : ''}
                   ${task.dueDate ? `<span><i class="fa fa-calendar mr-1"></i>截止: ${task.dueDate}</span>` : ''}
-                  ${task.assignee ? `<span><i class="fa fa-user mr-1"></i>${task.assignee}</span>` : ''}
+                  ${task.assignee ? `<span><i class="fa fa-user mr-1"></i>${esc(task.assignee)}</span>` : ''}
                 </div>
               </div>
             </div>
@@ -11167,13 +11635,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateStr(date);
         labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
         
         const completedOnDay = houseworkData.tasks.filter(t => {
-          return t.status === 'completed' && 
-                 t.completedAt && 
-                 t.completedAt.startsWith(dateStr);
+          return t.status === 'completed' &&
+                 t.completedAt &&
+                 getLocalDateStr(t.completedAt) === dateStr;
         }).length;
         
         data.push(completedOnDay);
@@ -11210,14 +11678,14 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateStr(date);
         labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
         
         const addedOnDay = houseworkData.tasks.filter(t => t.createdAt.startsWith(dateStr)).length;
         const completedOnDay = houseworkData.tasks.filter(t => {
-          return t.status === 'completed' && 
-                 t.completedAt && 
-                 t.completedAt.startsWith(dateStr);
+          return t.status === 'completed' &&
+                 t.completedAt &&
+                 getLocalDateStr(t.completedAt) === dateStr;
         }).length;
         
         addedData.push(addedOnDay);
