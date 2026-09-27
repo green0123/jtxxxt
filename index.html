@@ -40,43 +40,28 @@
               light: '#818cf8', // Indigo-400
               dark: '#4338ca', // Indigo-700
               50: '#eef2ff',
-              100: '#e0e7ff',
             }, 
             secondary: {
               DEFAULT: '#10b981', // Emerald-500
-              light: '#6ee7b7',
               dark: '#047857',
-              50: '#ecfdf5',
-              100: '#d1fae5',
             },
             warning: {
                DEFAULT: '#f59e0b', // Amber-500
-               light: '#fcd34d',
-               50: '#fffbeb',
-               100: '#fef3c7',
             },
             danger: {
               DEFAULT: '#ef4444', // Red-500
-              light: '#fca5a5',
-              50: '#fef2f2',
-              100: '#fee2e2',
             },
-            dark: '#1f2937',
           },
           fontFamily: {
             sans: ['"Inter"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
           },
           boxShadow: {
-            'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
             'card': '0 10px 30px -5px rgba(0, 0, 0, 0.05)',
             'card-hover': '0 20px 40px -5px rgba(0, 0, 0, 0.1)',
-            'glow': '0 0 15px rgba(79, 70, 229, 0.3)',
           },
           animation: {
             'fade-in': 'fadeIn 0.6s ease-out',
             'slide-up': 'slideUp 0.5s ease-out',
-            'bounce-slow': 'bounce 3s infinite',
-            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
           },
           keyframes: {
             fadeIn: {
@@ -110,35 +95,10 @@
         background: #a8a8a8; 
       }
       
-      .content-auto {
-        content-visibility: auto;
-      }
-      .transition-all-300 {
-        transition: all 300ms ease-in-out;
-      }
       
-      /* 按钮悬停效果 */
-      .btn-hover-effect {
-        transition: all 300ms ease-in-out;
-      }
-      
-      .btn-hover-effect:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      }
-      
-      .btn-hover-effect:active {
-        transform: translateY(0);
-      }
       .shadow-card {
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       }
-      .bg-gradient-primary {
-        background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
-      }
-      .text-balance {
-    text-wrap: balance;
-  }
 
   .form-input-focus {
     transition: all 300ms ease;
@@ -266,11 +226,11 @@
               <div class="flex space-x-3 sm:space-x-4">
                 <div>
                   <p class="text-xs text-red-600">支出</p>
-                  <p class="text-lg sm:text-xl font-bold text-red-600" id="homeYearlyExpense">¥0.00</p>
+                  <p class="text-lg sm:text-xl font-bold text-red-600" id="homeYearlyExpense">--</p>
                 </div>
                 <div>
                   <p class="text-xs text-blue-600">结余</p>
-                  <p class="text-lg sm:text-xl font-bold text-blue-600" id="homeYearlyBalance">¥0.00</p>
+                  <p class="text-lg sm:text-xl font-bold text-blue-600" id="homeYearlyBalance">--</p>
                 </div>
               </div>
             </div>
@@ -283,18 +243,18 @@
             </div>
             <div>
               <p class="text-xs font-medium text-gray-500 mb-1">年度学习时长</p>
-              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homeYearlyStudyHours">0小时</p>
+              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homeYearlyStudyHours">--</p>
             </div>
           </div>
         </div>
         <div class="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-4 sm:p-5 shadow-lg hover:shadow-xl transition-all duration-500 hover:-translate-y-2 border border-gray-100 group">
           <div class="flex items-center">
-            <div class="bg-gradient-to-br from-teal-50 to-teal-100 p-4 sm:p-5 rounded-2xl mr-4 sm:mr-6 group-hover:from-teal-100 group-hover:to-teal-200 transition-all duration-500 group-hover:shadow-md">
-              <i class="fa fa-home text-teal-600 text-2xl sm:text-3xl"></i>
+            <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-4 sm:p-5 rounded-2xl mr-4 sm:mr-6 group-hover:from-orange-100 group-hover:to-orange-200 transition-all duration-500 group-hover:shadow-md">
+              <i class="fa fa-fire text-orange-500 text-2xl sm:text-3xl"></i>
             </div>
             <div>
-              <p class="text-xs font-medium text-gray-500 mb-1">待办家务</p>
-              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homePendingHousework">0项</p>
+              <p class="text-xs font-medium text-gray-500 mb-1">家务连续完成天数</p>
+              <p class="text-lg sm:text-xl font-bold text-gray-800" id="homeHouseworkStreak">--</p>
             </div>
           </div>
         </div>
@@ -1270,55 +1230,6 @@
     </div>
   </div>
 
-  <!-- 编辑分类预算模态框 -->
-  <div id="editCategoryBudgetModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50 hidden">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 animate-slide-up">
-      <div class="px-6 py-4 border-b border-gray-200">
-        <div class="flex justify-between items-center">
-          <h3 class="text-lg font-semibold text-gray-800">编辑分类预算</h3>
-          <button id="closeEditCategoryBudgetModal" class="text-gray-400 hover:text-gray-500">
-            <i class="fa fa-times"></i>
-          </button>
-        </div>
-      </div>
-      <div class="px-6 py-4">
-        <form id="editCategoryBudgetForm">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">分类名称</label>
-            <div class="bg-gray-50 rounded-md p-2">
-              <span id="editCategoryName" class="text-sm text-gray-900"></span>
-            </div>
-          </div>
-          
-          <div class="mb-4">
-            <label for="editCategoryBudgetAmount" class="block text-sm font-medium text-gray-700 mb-1">预算金额</label>
-            <div class="relative rounded-md shadow-sm">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="text-gray-500 sm:text-sm">¥</span>
-              </div>
-              <input type="number" id="editCategoryBudgetAmount" step="0.01" min="0" required="" class="focus:ring-primary focus:border-primary block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md" placeholder="0.00">
-            </div>
-          </div>
-          
-          <!-- 实时校验提示 -->
-          <div id="categoryBudgetValidation" class="mb-4 p-3 rounded-md text-sm hidden">
-          </div>
-          
-          <input type="hidden" id="editCategoryId">
-          <input type="hidden" id="editCategoryBudgetPeriod">
-        </form>
-      </div>
-      <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
-        <button id="cancelCategoryBudgetEdit" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-          取消
-        </button>
-        <button id="submitCategoryBudgetEdit" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-          <i class="fa fa-save mr-1"></i> 保存
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- 通知提示 -->
   <div id="notification" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 max-w-md bg-white rounded-lg shadow-lg border-l-4 border-primary p-4 w-11/12 sm:w-auto transition-all duration-300 ease-in-out z-50 font-song" style="display: none;">
     <div class="flex items-center">
@@ -1460,11 +1371,6 @@
         }
       },
       
-      // 从 Supabase 获取数据（共享数据）
-      getFromSupabase: async function(key) {
-        return this.get(key);
-      },
-
       // 设置数据（仅同步到 Supabase）
       set: async function(key, value) {
         // 自动保存到 Supabase（共享数据）
@@ -1575,21 +1481,7 @@
         }
       },
 
-      // 清除指定key的缓存
-      clearCache: function(key) {
-        if (key && this.cache[key]) {
-          delete this.cache[key];
-          delete this.cacheTimestamp[key];
-          console.log(`[Cache Cleared] ${key}`);
-        }
-      },
 
-      // 清除所有缓存
-      clearAllCache: function() {
-        this.cache = {};
-        this.cacheTimestamp = {};
-        console.log('[Cache Cleared] All');
-      },
 
       // 删除数据（仅从 Supabase）
       remove: async function(key) {
@@ -1619,79 +1511,8 @@
         }
       },
       
-      // 启动实时同步
-      startSync: function() {
-        if (!this.isSupabaseAvailable()) {
-          return;
-        }
-        
-        // 订阅数据变化
-        this.subscribeToChanges();
-      },
       
-      // 订阅数据变化
-      subscribeToChanges: function() {
-        if (!this.isSupabaseAvailable()) return;
-        
-        // 使用 Supabase Realtime 订阅共享数据变化
-        const channel = window.supabaseClient
-          .channel('shared_data_changes')
-          .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'shared_data'
-          }, (payload) => {
-            console.log('Data change received:', payload);
-            
-            if (payload.new && payload.new.data_key) {
-              const key = payload.new.data_key;
-              const value = payload.new.data_value;
-              
-              // 触发数据更新事件
-              window.dispatchEvent(new CustomEvent('dataUpdated', { 
-                detail: { key, data: value } 
-              }));
-            }
-          })
-          .subscribe();
-        
-        this.subscriptions['shared_data'] = channel;
-      },
       
-      // 取消订阅
-      unsubscribe: function() {
-        Object.values(this.subscriptions).forEach(channel => {
-          window.supabaseClient.removeChannel(channel);
-        });
-        this.subscriptions = {};
-      },
-      
-      // 手动同步所有数据
-      syncAll: async function() {
-        if (!this.isSupabaseAvailable()) {
-          return false;
-        }
-        
-        this.isSyncing = true;
-        
-        const keys = ['familyFinanceData', 'studyData', 'houseworkData'];
-        
-        // 上传本地数据到 Supabase
-        for (const key of keys) {
-          const localData = await this.get(key);
-          if (localData) {
-            await this.setToSupabase(key, localData);
-          }
-        }
-        
-        // 从 Supabase 拉取最新数据
-        for (const key of keys) {
-          const remoteData = await this.getFromSupabase(key);
-        }
-        
-        this.isSyncing = false;
-        return true;
-      },
       
       // 诊断 Supabase 连接和表状态（优化：不执行写入操作 + 连接状态缓存）
       diagnose: async function(force = false) {
@@ -1846,24 +1667,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return { ok: true, message: '已导入 ' + modules.length + ' 个模块' };
       },
 
-      // 解决数据冲突
-      resolveConflicts: function(importedData) {
-        try {
-          // 获取当前存储的数据
-          const currentData = {
-            familyFinanceData: this.get('familyFinanceData', {}),
-            studyData: this.get('studyData', {}),
-            houseworkData: this.get('houseworkData', {})
-          };
-          
-          // 这里可以添加更复杂的冲突解决逻辑
-          // 例如，基于时间戳的合并、用户选择等
-          
-          console.log('Data conflict resolution completed');
-        } catch (e) {
-          console.error('Error resolving conflicts:', e);
-        }
-      }
     };
 
 
@@ -1894,13 +1697,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return isNaN(date.getTime()) ? null : date;
       },
 
-      // 获取当前月份的YYYY-MM格式
-      getCurrentMonth: function() {
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        return `${year}-${month}`;
-      }
     };
 
     // 全局工具类 - 应用通用功能
@@ -1929,10 +1725,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
     // 供 AppHelper 调用
     window.AppHelper = {
-      // 【XSS 修复】HTML 转义（与全局 esc 等价，供本对象内部使用）
-      escapeHtml: function(value) {
-        return window.esc(value);
-      },
       // 数据加载通用函数
       loadData: async function(key, defaultData) {
         const savedData = await StorageHelper.get(key, {
@@ -1967,21 +1759,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return saved;
       },
 
-      // 打开模态框
-      openModal: function(modalId, titleId, title, formId, data = null, callback = null) {
-        const modal = document.getElementById(modalId);
-        const titleElement = document.getElementById(titleId);
-        const form = document.getElementById(formId);
-        
-        if (form) form.reset();
-        if (titleElement) titleElement.textContent = title;
-        
-        if (data && callback) {
-          callback(data);
-        }
-        
-        if (modal) modal.classList.remove('hidden');
-      },
 
       // 关闭模态框
       closeModal: function(modalId) {
@@ -2051,28 +1828,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         }, 3000);
       },
 
-      // 导出数据
-      exportData: function(data, filename, type = 'json') {
-        let dataStr, blob;
-        
-        if (type === 'json') {
-          dataStr = JSON.stringify(data, null, 2);
-          blob = new Blob([dataStr], { type: 'application/json' });
-        } else if (type === 'text') {
-          dataStr = data;
-          blob = new Blob([dataStr], { type: 'text/plain;charset=utf-8' });
-        }
-        
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        
-        this.showNotification('成功', `${filename} 已导出`, 'success');
-      },
-
       // ============================================================
       // 【数据安全修复】导入数据加固
       // 原实现没有任何结构校验：选一个 {} 就能把云端数据整体清空，
@@ -2114,30 +1869,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         houseworkData: { tasks: 'array', types: 'array' }
       },
 
-      // 校验单个模块的数据结构
-      validateModule: function(moduleName, obj) {
-        const spec = this.IMPORT_SCHEMA[moduleName];
-        const errors = [];
-        if (!spec) return { ok: false, errors: ['未知的模块：' + moduleName] };
-        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
-          return { ok: false, errors: [moduleName + ' 的内容必须是一个对象'] };
-        }
-        Object.keys(spec).forEach(function(field) {
-          const v = obj[field];
-          if (v === undefined || v === null) return;
-          if (spec[field] === 'array') {
-            if (!Array.isArray(v)) {
-              errors.push(moduleName + '.' + field + ' 应为数组，实际是 ' + typeof v);
-            } else if (v.length > 200000) {
-              errors.push(moduleName + '.' + field + ' 条目过多（' + v.length + '），疑似异常文件');
-            }
-          } else if (typeof v !== 'object' || Array.isArray(v)) {
-            errors.push(moduleName + '.' + field + ' 应为对象');
-          }
-        });
-        return { ok: errors.length === 0, errors: errors };
-      },
-
       // 校验整包备份文件（财务整体导入格式：{ data: { ... } }，也兼容直接传模块对象）
       validateImportPackage: function(pkg) {
         const errors = [];
@@ -2148,80 +1879,39 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
           return { ok: false, errors: ['data 字段不是一个对象'] };
         }
+        // 校验单个模块的数据结构（原 AppHelper.validateModule，仅此处使用，已内联）
+        const validateModule = function(moduleName, obj) {
+          const spec = AppHelper.IMPORT_SCHEMA[moduleName];
+          const errors = [];
+          if (!spec) return { ok: false, errors: ['未知的模块：' + moduleName] };
+          if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+            return { ok: false, errors: [moduleName + ' 的内容必须是一个对象'] };
+          }
+          Object.keys(spec).forEach(function(field) {
+            const v = obj[field];
+            if (v === undefined || v === null) return;
+            if (spec[field] === 'array') {
+              if (!Array.isArray(v)) {
+                errors.push(moduleName + '.' + field + ' 应为数组，实际是 ' + typeof v);
+              } else if (v.length > 200000) {
+                errors.push(moduleName + '.' + field + ' 条目过多（' + v.length + '），疑似异常文件');
+              }
+            } else if (typeof v !== 'object' || Array.isArray(v)) {
+              errors.push(moduleName + '.' + field + ' 应为对象');
+            }
+          });
+          return { ok: errors.length === 0, errors: errors };
+        };
+
         let found = 0;
-        const self = this;
         Object.keys(this.IMPORT_SCHEMA).forEach(function(k) {
           if (data[k] === undefined) return;
           found++;
-          const r = self.validateModule(k, data[k]);
+          const r = validateModule(k, data[k]);
           if (!r.ok) r.errors.forEach(function(e) { errors.push(e); });
         });
         if (found === 0) errors.push('文件中没有找到任何可导入的模块数据');
         return { ok: errors.length === 0, errors: errors };
-      },
-
-      // 导入前自动备份当前数据（固定 key，避免备份无限膨胀）
-      backupBeforeImport: function(moduleKey, currentData) {
-        return window.StorageHelper.set('__backup_before_import', {
-          moduleKey: moduleKey,
-          createdAt: new Date().toISOString(),
-          data: currentData
-        });
-      },
-
-      // 导入数据
-      importData: function(e, callback) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // 【数据安全修复】限制文件大小
-        if (file.size > 8 * 1024 * 1024) {
-          this.showNotification('导入失败', '文件过大（超过 8MB），请确认选择的是本系统导出的备份文件。', 'error');
-          e.target.value = '';
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = async function(event) {
-          let importedData;
-          try {
-            importedData = JSON.parse(event.target.result);
-          } catch (error) {
-            AppHelper.showNotification('导入失败', '文件不是合法的 JSON，已取消导入。', 'error');
-            return;
-          }
-          // 【数据安全修复】必须 await 回调。
-          // 原实现直接调用 async 回调且不等待，写盘还没完成就提示成功并刷新页面。
-          try {
-            await callback(importedData);
-          } catch (err) {
-            console.error('导入处理失败:', err);
-            AppHelper.showNotification('导入失败', '导入过程中出错：' + (err && err.message ? err.message : '未知错误'), 'error');
-          }
-        };
-        reader.readAsText(file);
-        e.target.value = '';
-      },
-
-      // 渲染空状态
-      renderEmptyState: function(container, icon, message, subMessage = '') {
-        container.innerHTML = `
-          <div class="text-center py-8 text-gray-500">
-            <i class="fa ${icon} text-4xl mb-2 text-gray-300"></i>
-            <p>${message}</p>
-            ${subMessage ? `<p class="text-sm mt-1">${subMessage}</p>` : ''}
-          </div>
-        `;
-      },
-
-      // 设置标签页事件监听器
-      setupTabListeners: function(tabNavSelector, switchTabCallback) {
-        document.querySelectorAll(tabNavSelector).forEach(btn => {
-          btn.addEventListener('click', function() {
-            const tab = this.dataset.tab;
-            switchTabCallback(tab);
-          });
-        });
       },
 
       // 生成唯一ID
@@ -2708,11 +2398,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           .reduce((total, t) => total + t.amount, 0);
       }
 
-      // 计算指定交易列表的结余
-      function calculateBalance(transactions) {
-        return calculateTotalIncome(transactions) - calculateTotalExpense(transactions);
-      }
-
       // 按分类汇总交易
       function groupTransactionsByCategory(transactions, type) {
         const grouped = {};
@@ -2729,6 +2414,16 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return grouped;
       }
 
+      // 更新首页「财务状况」卡（年度支出 / 年度结余）
+      // 首页三张统计卡各有唯一归属模块：财务→本卡、学习→年度学习时长、家务→连续完成天数，
+      // 互不越界写入，避免同一个数字被多处重复计算、口径打架。
+      function updateHomeFinanceStats(yearlyExpense, yearlyBalance) {
+        const expenseEl = document.getElementById('homeYearlyExpense');
+        const balanceEl = document.getElementById('homeYearlyBalance');
+        if (expenseEl) expenseEl.textContent = `¥${yearlyExpense.toFixed(2)}`;
+        if (balanceEl) balanceEl.textContent = `¥${yearlyBalance.toFixed(2)}`;
+      }
+
       // 更新仪表盘
       function updateDashboard() {
         const currentMonthTransactions = getCurrentMonthTransactions();
@@ -2740,7 +2435,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 计算本月收支
         const monthlyIncome = calculateTotalIncome(currentMonthTransactions);
         const monthlyExpense = calculateTotalExpense(currentMonthTransactions);
-        const monthlyBalance = monthlyIncome - monthlyExpense;
 
         // 计算本年收支
         const yearlyIncome = calculateTotalIncome(currentYearTransactions);
@@ -2750,12 +2444,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 计算上月收支
         const lastMonthIncome = calculateTotalIncome(lastMonthTransactions);
         const lastMonthExpense = calculateTotalExpense(lastMonthTransactions);
-        const lastMonthBalance = lastMonthIncome - lastMonthExpense;
         
         // 计算同比变化
         const incomeChange = lastMonthIncome > 0 ? ((monthlyIncome - lastMonthIncome) / lastMonthIncome) * 100 : 0;
         const expenseChange = lastMonthExpense > 0 ? ((monthlyExpense - lastMonthExpense) / lastMonthExpense) * 100 : 0;
-        const balanceChange = lastMonthBalance !== 0 ? ((monthlyBalance - lastMonthBalance) / Math.abs(lastMonthBalance)) * 100 : 0;
         
         // 计算今日收支
         const todayIncome = calculateTotalIncome(todayTransactions);
@@ -2774,8 +2466,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         document.getElementById('monthlyExpense').textContent = `¥${monthlyExpense.toFixed(2)}`;
 
         // 更新UI - 首页（财务状况）
-        document.getElementById('homeYearlyExpense').textContent = `¥${yearlyExpense.toFixed(2)}`;
-        document.getElementById('homeYearlyBalance').textContent = `¥${yearlyBalance.toFixed(2)}`;
+        updateHomeFinanceStats(yearlyExpense, yearlyBalance);
 
         // 更新今日收支UI
         document.getElementById('todayIncome').textContent = `¥${todayIncome.toFixed(2)}`;
@@ -2840,23 +2531,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         // 更新最近交易记录
         updateRecentTransactions();
 
-        // 更新首页的年度学习时长
-        const currentYear = new Date().getFullYear();
-        const yearlyStudyRecords = studyData.records.filter(r => {
-          if (!r.date) return false;
-          return parseInt(r.date.substring(0, 4)) === currentYear;
-        });
-        const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
-        const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
-        document.getElementById('homeYearlyStudyHours').textContent = `${yearlyStudyHours}小时`;
-
-        // 更新首页的待办家务数量（排除逾期）
-      const today = new Date();
-      const pendingHousework = houseworkData.tasks.filter(t => 
-        t.status === 'pending' && 
-        (!t.dueDate || new Date(t.dueDate) >= today)
-      ).length;
-      document.getElementById('homePendingHousework').textContent = `${pendingHousework}项`;
       }
 
       // 更新收支趋势图
@@ -7158,7 +6832,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       renderStudyPlans();
       renderMonthlyPlans();
       renderWeeklyPlans();
-      // updatePlanStatistics(); // 已移除顶部显示模块
       updateMonthlyPlanLinkCard();
       renderCourses();
       updateCourseYearFilter();
@@ -7166,28 +6839,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       initStudyCharts();
 
       // 更新首页的年度学习时长
-      const currentYear = new Date().getFullYear();
-      const yearlyStudyRecords = studyData.records.filter(r => {
-        if (!r.date) return false;
-        return parseInt(r.date.substring(0, 4)) === currentYear;
-      });
-      const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
-      const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
-      const homeYearlyStudyHours = document.getElementById('homeYearlyStudyHours');
-      if (homeYearlyStudyHours) {
-        homeYearlyStudyHours.textContent = `${yearlyStudyHours}小时`;
-      }
-
-      // 更新首页的待办家务数量（排除逾期）
-      const today = new Date();
-      const pendingHousework = houseworkData.tasks.filter(t => 
-        t.status === 'pending' && 
-        (!t.dueDate || new Date(t.dueDate) >= today)
-      ).length;
-      const homePendingHousework = document.getElementById('homePendingHousework');
-      if (homePendingHousework) {
-        homePendingHousework.textContent = `${pendingHousework}项`;
-      }
+      updateHomeStudyHours();
     }
 
     // 加载学习数据
@@ -7314,15 +6966,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         });
       });
 
-      // 导出学习数据
-      document.getElementById('exportStudyDataBtn')?.addEventListener('click', exportStudyData);
-
-      // 导入学习数据
-      document.getElementById('importStudyDataBtn')?.addEventListener('click', () => {
-        document.getElementById('importStudyDataInput').click();
-      });
-      document.getElementById('importStudyDataInput')?.addEventListener('change', importStudyData);
-
       // 初始化日期选择器为今天
       const today = new Date();
       document.getElementById('recordDate').value = today.toISOString().split('T')[0];
@@ -7359,11 +7002,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 初始化学习记录列表
       renderStudyRecords();
       renderRecentStudyRecords();
-    }
-
-    // 富文本编辑器格式化函数
-    function formatText(command) {
-      document.execCommand(command, false, null);
     }
 
     // 学习计划类型切换
@@ -7414,59 +7052,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
     }
 
-    // 更新学习计划统计卡片 - 已移除顶部显示模块
-    /*
-    function updatePlanStatistics() {
-      // 计算本月计划完成率
-      const now = new Date();
-      const currentMonth = now.getMonth() + 1;
-      const currentYear = now.getFullYear();
-      
-      const monthlyPlans = studyData.monthlyPlans.filter(p => 
-        p.year === currentYear && p.month === currentMonth
-      );
-      
-      const totalMonthlyPlans = monthlyPlans.length;
-      const completedMonthlyPlans = monthlyPlans.filter(p => p.completed).length;
-      const completionRate = totalMonthlyPlans > 0 ? Math.round((completedMonthlyPlans / totalMonthlyPlans) * 100) : 0;
-      
-      // document.getElementById('monthlyCompletionRate').textContent = completionRate + '%';
-      // document.getElementById('monthlyProgressBar').style.width = completionRate + '%';
-
-      // 计算本周学习时长
-      const weekStart = getWeekStart(now);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-      
-      const weeklyRecords = studyData.records.filter(r => {
-        const recordDate = new Date(r.date);
-        return recordDate >= weekStart && recordDate < weekEnd;
-      });
-      
-      const weeklyMinutes = weeklyRecords.reduce((sum, r) => sum + r.duration, 0);
-      const weeklyHours = (weeklyMinutes / 60).toFixed(1);
-      // document.getElementById('weeklyStudyHours').textContent = weeklyHours + 'h';
-
-      // 获取本周目标时长
-      const currentWeek = getWeekNumber(now);
-      const weeklyPlan = studyData.weeklyPlans.find(p => 
-        p.year === currentYear && p.week === currentWeek
-      );
-      // document.getElementById('weeklyTargetHours').textContent = weeklyPlan?.targetHours || 0;
-
-      // 计算连续学习天数
-      const streak = calculateStudyStreak();
-      // document.getElementById('studyStreakDays').textContent = streak + '天';
-
-      // 计算待完成任务
-      const todayStr = DateHelper.format(now);
-      const todayDailyPlans = studyData.dailyPlans.filter(p => p.date === todayStr);
-      const pendingTasks = todayDailyPlans.filter(p => !p.completed).length;
-      // document.getElementById('pendingTasksCount').textContent = pendingTasks;
-      // document.getElementById('todayDueTasks').textContent = pendingTasks;
-    }
-    */
-
     // 获取本周开始日期(周一)
     function getWeekStart(date) {
       const d = new Date(date);
@@ -7512,44 +7097,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
     }
 
-    // 【缺陷修复】统计 [startDate, endDate] 之间实际跨越的周数（按周一对齐）。
-    // 用途：跨年时 ISO 周号会从 53 跳回 1，直接用 endWeek - startWeek + 1 会得到负数。
-    // 该函数结果恒 >= 1，可安全用作除数。
-    function countWeeksInRange(startDate, endDate) {
-      const s = new Date(startDate); s.setHours(0, 0, 0, 0);
-      const e = new Date(endDate); e.setHours(0, 0, 0, 0);
-      // 对齐到当周的周一
-      const sMon = new Date(s); sMon.setDate(s.getDate() - ((s.getDay() + 6) % 7));
-      const eMon = new Date(e); eMon.setDate(e.getDate() - ((e.getDay() + 6) % 7));
-      const weeks = Math.round((eMon - sMon) / (7 * 86400000)) + 1;
-      return Math.max(1, weeks);
-    }
-
-    // 计算连续学习天数
-    function calculateStudyStreak() {
-      if (studyData.records.length === 0) return 0;
-      
-      const uniqueDates = [...new Set(studyData.records.map(r => r.date))].sort().reverse();
-      let streak = 0;
-      let currentDate = new Date();
-      currentDate.setHours(0, 0, 0, 0);
-      
-      for (const dateStr of uniqueDates) {
-        const recordDate = new Date(dateStr);
-        recordDate.setHours(0, 0, 0, 0);
-        const diffDays = Math.floor((currentDate - recordDate) / (1000 * 60 * 60 * 24));
-        
-        if (diffDays <= 1) {
-          streak++;
-          currentDate = recordDate;
-        } else {
-          break;
-        }
-      }
-      
-      return streak;
-    }
-
     // 学习计划数据结构管理
     function initStudyPlansData() {
       if (!studyData.monthlyPlans) studyData.monthlyPlans = [];
@@ -7563,7 +7110,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const form = document.getElementById('monthlyPlanForm');
       const yearSelect = document.getElementById('monthlyPlanYear');
       const monthSelect = document.getElementById('monthlyPlanMonth');
-      const courseSelect = document.getElementById('monthlyPlanCourse');
 
       form.reset();
 
@@ -7705,7 +7251,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         
         await saveStudyData();
         renderMonthlyPlans();
-        // updatePlanStatistics(); // 已移除顶部显示模块
       }
     }
 
@@ -7919,106 +7464,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         plan.updatedAt = new Date().toISOString();
         await saveStudyData();
         renderMonthlyPlans();
-        // updatePlanStatistics(); // 已移除顶部显示模块
       }
-    }
-
-    // 一键生成本月所有周计划
-    async function generateAllWeeklyPlans(monthlyPlanId) {
-      const monthlyPlan = studyData.monthlyPlans.find(p => p.id === monthlyPlanId);
-      if (!monthlyPlan) {
-        alert('月计划不存在');
-        return;
-      }
-
-      // 计算本月包含的周数
-      const monthStart = new Date(monthlyPlan.year, monthlyPlan.month - 1, 1);
-      const monthEnd = new Date(monthlyPlan.year, monthlyPlan.month, 0);
-      const startWeek = getWeekNumber(monthStart);
-      // 【缺陷修复】原式 endWeek - startWeek + 1 在跨年月份会算出负数
-      //（如 2027 年 1 月：1/1 属第 53 周、1/31 属第 4 周 → -48），
-      // 导致「一键生成周计划」静默生成 0 条，且目标时长为负。改为按实际跨越周数计算。
-      let totalWeeks = getWeekNumber(monthEnd) - startWeek + 1;
-      if (totalWeeks < 1) {
-        totalWeeks = countWeeksInRange(monthStart, monthEnd);
-      }
-      totalWeeks = Math.max(1, totalWeeks);
-
-      // 检查是否有关联课程
-      let targetHours = 20; // 默认每周20小时
-      if (monthlyPlan.courseId) {
-        const course = studyData.courses.find(c => c.id === monthlyPlan.courseId);
-        if (course) {
-          // 【缺陷修复】除数已保证 >=1，这里再兜底一次，避免负时长入库
-          targetHours = Math.max(0, Math.ceil((course.totalLessons || 0) / totalWeeks));
-        }
-      }
-
-      let createdCount = 0;
-      let updatedCount = 0;
-
-      for (let i = 0; i < totalWeeks; i++) {
-        const weekNum = startWeek + i;
-        const existingPlan = studyData.weeklyPlans.find(p => 
-          p.year === monthlyPlan.year && p.week === weekNum && p.monthId === monthlyPlanId
-        );
-
-        if (!existingPlan) {
-          const weekInMonth = i + 1;
-          const weeklyPlan = {
-            id: Date.now().toString() + Math.random(),
-            year: monthlyPlan.year,
-            week: weekNum,
-            weekInMonth: weekInMonth,
-            totalWeeksInMonth: totalWeeks,
-            goal: `第${weekInMonth}/${totalWeeks}周目标\n${monthlyPlan.goal.substring(0, 60)}...`,
-            targetHours: targetHours,
-            monthId: monthlyPlanId,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            completed: false
-          };
-          studyData.weeklyPlans.push(weeklyPlan);
-          createdCount++;
-        } else {
-          updatedCount++;
-        }
-      }
-
-      await saveStudyData();
-      renderMonthlyPlans();
-      renderWeeklyPlans();
-      // updatePlanStatistics(); // 已移除顶部显示模块
-      
-      // 计算第一个周和最后一个周的日期区间
-      const firstWeekRange = getWeekDateRange(monthlyPlan.year, startWeek);
-      const lastWeekRange = getWeekDateRange(monthlyPlan.year, endWeek);
-      
-      alert(`✅ 周计划生成完成！\n\n新建: ${createdCount}个\n已存在: ${updatedCount}个\n\n日期区间: ${firstWeekRange.fullRange} 至 ${lastWeekRange.fullRange}\n本月共${totalWeeks}周，每周目标${targetHours}小时`);
-    }
-
-    // 切换到周计划视图
-    function switchToWeeklyPlan(monthlyPlanId) {
-      // 切换到周计划标签
-      document.querySelector('.plan-type-btn[data-type="weekly"]').click();
-    }
-
-    // 查看周计划详情
-    function viewWeeklyPlanDetail(weeklyPlanId) {
-      // 切换到周计划标签
-      document.querySelector('.plan-type-btn[data-type="weekly"]').click();
-      
-      // 滚动到对应的周计划（需要添加延迟等待DOM更新）
-      setTimeout(() => {
-        const weeklyPlanElement = document.querySelector(`[data-weekly-plan-id="${weeklyPlanId}"]`);
-        if (weeklyPlanElement) {
-          weeklyPlanElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          weeklyPlanElement.classList.add('ring-2', 'ring-indigo-400');
-          setTimeout(() => {
-            weeklyPlanElement.classList.remove('ring-2', 'ring-indigo-400');
-          }, 2000);
-        }
-      }, 100);
     }
 
     // 周计划相关函数
@@ -8362,7 +7808,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         studyData.weeklyPlans = studyData.weeklyPlans.filter(p => p.id !== planId);
         await saveStudyData();
         renderWeeklyPlans();
-        // updatePlanStatistics(); // 已移除顶部显示模块
       }
     }
 
@@ -8393,7 +7838,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const groupedPlans = {};
       const now = new Date();
       now.setHours(0, 0, 0, 0);
-      const currentWeek = getWeekNumber(now);
       const currentYear = now.getFullYear();
       const currentMonth = now.getMonth() + 1;
 
@@ -8683,90 +8127,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         plan.updatedAt = new Date().toISOString();
         await saveStudyData();
         renderWeeklyPlans();
-        // updatePlanStatistics(); // 已移除顶部显示模块
       }
     }
-
-    // 从月计划智能生成周计划
-    async function generateWeeklyPlansFromMonthly() {
-      const now = new Date();
-      const currentMonth = now.getMonth() + 1;
-      const currentYear = now.getFullYear();
-      
-      const monthlyPlan = studyData.monthlyPlans.find(p => 
-        p.year === currentYear && p.month === currentMonth
-      );
-
-      if (!monthlyPlan) {
-        alert('请先创建本月计划');
-        return;
-      }
-
-      const currentWeek = getWeekNumber(now);
-      const existingWeekPlan = studyData.weeklyPlans.find(p => 
-        p.year === currentYear && p.week === currentWeek
-      );
-
-      if (existingWeekPlan) {
-        alert('本周计划已存在，如需修改请点击编辑按钮');
-        return;
-      }
-
-      // 计算本月剩余周数
-      const monthStart = new Date(currentYear, currentMonth - 1, 1);
-      const monthEnd = new Date(currentYear, currentMonth, 0);
-      // 【缺陷修复】跨年月份（如 2027 年 1 月）ISO 周号会从 53 跳回 1，
-      // 直接相减会得到负数，进而算出负的目标时长。改为兜底为实际跨越周数。
-      let totalWeeksInMonth = getWeekNumber(monthEnd) - getWeekNumber(monthStart) + 1;
-      if (totalWeeksInMonth < 1) {
-        totalWeeksInMonth = countWeeksInRange(monthStart, monthEnd);
-      }
-      totalWeeksInMonth = Math.max(1, totalWeeksInMonth);
-      const currentWeekInMonth = Math.min(
-        totalWeeksInMonth,
-        Math.max(1, currentWeek - getWeekNumber(monthStart) + 1)
-      );
-
-      // 检查是否有关联课程,如果有则根据课程总时长计算周目标
-      let targetHours = 20; // 默认每周20小时
-      let weeklyGoal = `完成月计划目标的第${currentWeekInMonth}/${totalWeeksInMonth}周任务:\n${monthlyPlan.goal.substring(0, 80)}...`;
-      
-      if (monthlyPlan.courseId) {
-        const course = studyData.courses.find(c => c.id === monthlyPlan.courseId);
-        if (course) {
-          // 根据课程总时长和剩余周数动态计算
-          const remainingWeeks = Math.max(1, totalWeeksInMonth - currentWeekInMonth + 1);
-          targetHours = Math.max(0, Math.ceil((course.totalLessons || 0) / remainingWeeks));
-          weeklyGoal = `课程学习进度: 第${currentWeekInMonth}/${totalWeeksInMonth}周\n目标: 完成课程${targetHours}小时的学习内容\n课程: ${course.name}`;
-        }
-      }
-
-      const weeklyPlan = {
-        id: Date.now().toString(),
-        year: currentYear,
-        week: currentWeek,
-        weekInMonth: currentWeekInMonth,
-        totalWeeksInMonth: totalWeeksInMonth,
-        goal: weeklyGoal,
-        targetHours: targetHours,
-        monthId: monthlyPlan.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        completed: false
-      };
-
-      // 计算日期区间
-      const dateRange = getWeekDateRange(currentYear, currentWeek);
-
-      studyData.weeklyPlans.push(weeklyPlan);
-      await saveStudyData();
-      renderWeeklyPlans();
-      // updatePlanStatistics(); // 已移除顶部显示模块
-      updateMonthlyPlanLinkCard();
-      alert(`✅ 周计划生成成功！\n\n日期区间: ${dateRange.fullRange}\n这是本月的第${currentWeekInMonth}/${totalWeeksInMonth}周计划\n目标学习时长: ${targetHours}小时`);
-    }
-
-    // 智能生成周计划（已移除智能生成功能）
 
     // 更新月计划关联卡片
     function updateMonthlyPlanLinkCard() {
@@ -8862,34 +8224,31 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
     }
 
+    // 更新首页的「年度学习时长」（唯一计算入口，模块内其它地方复用它的返回值）
+    function updateHomeStudyHours() {
+      const hours = getYearlyStudyHours();
+      const el = document.getElementById('homeYearlyStudyHours');
+      if (el) el.textContent = `${hours}小时`;
+      return hours;
+    }
+
+    // 计算本年度学习时长（小时，保留 1 位小数）
+    function getYearlyStudyHours() {
+      const currentYear = new Date().getFullYear();
+      const minutes = studyData.records
+        .filter(r => r.date && parseInt(r.date.substring(0, 4)) === currentYear)
+        .reduce((sum, r) => sum + (r.duration || 0), 0);
+      return (minutes / 60).toFixed(1);
+    }
+
     // 更新学习概览
     function updateStudyDashboard() {
       // 进行中课程
       const activeCourses = studyData.courses.filter(c => c.status === 'active');
       document.getElementById('activeCoursesCount').textContent = `${activeCourses.length}门`;
-      // 同时更新首页的年度学习时长
-      const currentYear = new Date().getFullYear();
-      const yearlyStudyRecords = studyData.records.filter(r => {
-        if (!r.date) return false;
-        return parseInt(r.date.substring(0, 4)) === currentYear;
-      });
-      const yearlyStudyMinutes = yearlyStudyRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
-      const yearlyStudyHours = (yearlyStudyMinutes / 60).toFixed(1);
-      const homeYearlyStudyHours = document.getElementById('homeYearlyStudyHours');
-      if (homeYearlyStudyHours) {
-        homeYearlyStudyHours.textContent = `${yearlyStudyHours}小时`;
-      }
 
-      // 同时更新首页的待办家务数量（排除逾期）
-      const today = new Date();
-      const pendingHousework = houseworkData.tasks.filter(t => 
-        t.status === 'pending' && 
-        (!t.dueDate || new Date(t.dueDate) >= today)
-      ).length;
-      const homePendingHousework = document.getElementById('homePendingHousework');
-      if (homePendingHousework) {
-        homePendingHousework.textContent = `${pendingHousework}项`;
-      }
+      // 更新首页的年度学习时长（同时拿到值，供本页「年度学习时长」概览复用）
+      const yearlyStudyHours = updateHomeStudyHours();
 
       // 已完成课程
       const completedCourses = studyData.courses.filter(c => c.status === 'completed');
@@ -9280,7 +8639,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       Object.keys(groupedCourses).sort((a, b) => b - a).forEach(yearKey => {
         const yearData = groupedCourses[yearKey];
         const isCurrentYear = yearData.isCurrentYear;
-        const yearProgress = yearData.totalDuration > 0 ? Math.round((yearData.completedDuration / yearData.totalDuration) * 100) : 0;
 
         html += `
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -10577,155 +9935,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       suggestionEl.textContent = suggestion;
     }
 
-    // 导出学习数据
-    function exportStudyData() {
-      AppHelper.exportData(studyData, `study-data-${new Date().toISOString().split('T')[0]}.json`);
-    }
-
-    // 导出计划为文本格式
-    function exportPlanAsText(planType) {
-      let content = '';
-      let filename = '';
-
-      switch(planType) {
-        case 'monthly':
-          content = generateMonthlyPlanText();
-          filename = `monthly-plans-${new Date().toISOString().split('T')[0]}.txt`;
-          break;
-        case 'weekly':
-          content = generateWeeklyPlanText();
-          filename = `weekly-plans-${new Date().toISOString().split('T')[0]}.txt`;
-          break;
-      }
-
-      if (content) {
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        showNotification('成功', '计划已导出', 'success');
-      }
-    }
-
-    function generateMonthlyPlanText() {
-      if (!studyData.monthlyPlans || studyData.monthlyPlans.length === 0) return '暂无月计划';
-
-      let text = '=== 月学习计划 ===\n\n';
-      studyData.monthlyPlans.forEach(plan => {
-        text += `【${plan.year}年${plan.month}月】\n`;
-        text += `目标：${plan.goal}\n`;
-        text += `学习重点：\n${stripHtml(plan.content) || '暂无内容'}\n`;
-        if (plan.evaluation) {
-          text += `学习成果评估：\n${plan.evaluation}\n`;
-        }
-        text += `更新时间：${new Date(plan.updatedAt).toLocaleString()}\n\n`;
-        text += '------------------------\n\n';
-      });
-      return text;
-    }
-
-    function generateWeeklyPlanText() {
-      if (!studyData.weeklyPlans || studyData.weeklyPlans.length === 0) return '暂无周计划';
-
-      let text = '=== 周学习计划 ===\n\n';
-      studyData.weeklyPlans.forEach(plan => {
-        text += `【${plan.year}年${plan.month}月第${plan.week}周】\n`;
-        text += `目标：${plan.goal}\n`;
-        text += `学习进度：\n${stripHtml(plan.content) || '暂无内容'}\n`;
-        if (plan.summary) {
-          text += `周总结：\n${plan.summary}\n`;
-        }
-        text += `更新时间：${new Date(plan.updatedAt).toLocaleString()}\n\n`;
-        text += '------------------------\n\n';
-      });
-      return text;
-    }
-
-    // 移除HTML标签
-    function stripHtml(html) {
-      // 【XSS 修复】原来用 detached div 的 innerHTML 来剥标签，
-      // 但 innerHTML 赋值同样会触发 <img onerror> 等处理器，仍是一个可利用的注入点。
-      // 改用 DOMParser：它只解析、不执行脚本、不加载资源。
-      if (html === null || html === undefined) return '';
-      try {
-        const doc = new DOMParser().parseFromString(String(html), 'text/html');
-        return (doc.body && doc.body.textContent) || '';
-      } catch (e) {
-        return String(html);
-      }
-    }
-
-    // 导入学习数据
-    function importStudyData(e) {
-      AppHelper.importData(e, function(importedData) {
-        // 【数据安全修复】先校验结构，再要求确认，最后才允许覆盖
-        const check = AppHelper.validateModule('studyData', importedData);
-        if (!check.ok) {
-          AppHelper.showNotification('导入已取消', '文件结构不正确：' + check.errors.slice(0, 3).join('；'), 'error');
-          return;
-        }
-        // 【XSS 修复】清理 id，防止 onclick 属性注入
-        AppHelper.sanitizeIds('studyData', importedData);
-        const total = (importedData.plans || []).length + (importedData.courses || []).length
-          + (importedData.records || []).length + (importedData.monthlyPlans || []).length
-          + (importedData.weeklyPlans || []).length;
-        if (total === 0) {
-          AppHelper.showNotification('导入已取消', '该文件不含任何学习数据。为避免误清空云端数据，已拒绝导入。', 'error');
-          return;
-        }
-
-        // 【数据安全修复】原来学习模块导入完全没有确认框，误选文件即造成不可逆覆盖
-        showConfirmDialog(
-          '导入学习数据',
-          `将用文件中的 ${total} 条数据覆盖当前学习模块。覆盖前会自动把现有数据备份到云端。确定继续吗？`,
-          async function() {
-            // 先备份当前数据
-            await AppHelper.backupBeforeImport('studyData', {
-              plans: studyData.plans, courses: studyData.courses, records: studyData.records,
-              monthlyPlans: studyData.monthlyPlans, weeklyPlans: studyData.weeklyPlans
-            });
-
-            studyData.plans = importedData.plans || [];
-            studyData.courses = importedData.courses || [];
-
-            // 兼容旧版本数据，为学习记录添加新字段
-            studyData.records = (importedData.records || []).map(function(record) {
-              return Object.assign({}, record, {
-                startTime: record.startTime || null,
-                endTime: record.endTime || null,
-                content: record.content || (record.note || '')
-              });
-            });
-
-            studyData.monthlyPlans = importedData.monthlyPlans || [];
-            studyData.weeklyPlans = importedData.weeklyPlans || [];
-
-            // 【数据安全修复】以真实写入结果决定提示，不再无条件报「成功」
-            const ok = await saveStudyData();
-            if (!ok) {
-              AppHelper.showNotification('导入未生效', '数据未写入云端（可能是网络异常，或其它页面已修改数据）。当前学习数据没有被覆盖，请刷新后重试。', 'error');
-              return;
-            }
-            renderStudyPlans();
-            renderCourses();
-            renderStudyRecords();
-            updateStudyDashboard();
-            updateStudyCharts();
-            AppHelper.showNotification('成功', '学习数据已导入（原数据已自动备份）', 'success');
-          }
-        );
-      });
-    }
-
-
-
-
-
-
-
     // 添加课程到课程表
 
 
@@ -10760,12 +9969,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       initHouseworkCharts();
       updateHouseworkStatistics();
 
-      // 更新首页的待办家务数量
-      const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
-      const homePendingHousework = document.getElementById('homePendingHousework');
-      if (homePendingHousework) {
-        homePendingHousework.textContent = `${pendingHousework}项`;
-      }
+      // 更新首页的家务连续完成天数
+      updateHomeHouseworkStreak();
     }
 
     // 加载家务数据
@@ -10900,13 +10105,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           updateHouseworkTrendChart(parseInt(this.dataset.period));
         });
       });
-
-      // 导出/导入
-      document.getElementById('exportHouseworkDataBtn')?.addEventListener('click', exportHouseworkData);
-      document.getElementById('importHouseworkDataBtn')?.addEventListener('click', () => {
-        document.getElementById('importHouseworkDataInput').click();
-      });
-      document.getElementById('importHouseworkDataInput')?.addEventListener('change', importHouseworkData);
     }
 
     // 切换标签页
@@ -11003,6 +10201,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
       
       return streak;
+    }
+
+    // 更新首页的「家务连续完成天数」（复用上面的连续统计，避免各处重复计算）
+    function updateHomeHouseworkStreak() {
+      const el = document.getElementById('homeHouseworkStreak');
+      if (!el) return;
+      el.textContent = `${calculateHouseworkCompletionStreak()}天`;
     }
 
     // 更新类型统计
@@ -11146,12 +10351,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       renderRecentHousework();
       updateHouseworkStatistics();
 
-      // 更新首页的待办家务数量
-      const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
-      const homePendingHousework = document.getElementById('homePendingHousework');
-      if (homePendingHousework) {
-        homePendingHousework.textContent = `${pendingHousework}项`;
-      }
+      // 更新首页的家务连续完成天数
+      updateHomeHouseworkStreak();
       
       AppHelper.showNotification('成功', '家务已保存', 'success');
     }
@@ -11169,41 +10370,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         renderRecentHousework();
         updateHouseworkStatistics();
 
-        // 更新首页的待办家务数量
-        const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
-        const homePendingHousework = document.getElementById('homePendingHousework');
-        if (homePendingHousework) {
-          homePendingHousework.textContent = `${pendingHousework}项`;
-        }
-      }
-    }
-
-    // 标记家务完成
-    async function toggleHouseworkComplete(id) {
-      const task = houseworkData.tasks.find(t => t.id === id);
-      if (task) {
-        if (task.status === 'completed') {
-          task.status = 'pending';
-          task.completedAt = null;
-        } else {
-          task.status = 'completed';
-          task.completedAt = new Date().toISOString();
-        }
-        await saveHouseworkData();
-        updateHouseworkDashboard();
-        renderPendingHousework();
-        renderInProgressHousework();
-        renderCompletedHousework();
-        renderOverdueHousework();
-        renderRecentHousework();
-        updateHouseworkStatistics();
-
-        // 更新首页的待办家务数量
-        const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
-        const homePendingHousework = document.getElementById('homePendingHousework');
-        if (homePendingHousework) {
-          homePendingHousework.textContent = `${pendingHousework}项`;
-        }
+        // 更新首页的家务连续完成天数
+        updateHomeHouseworkStreak();
       }
     }
 
@@ -11220,12 +10388,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         renderRecentHousework();
         updateHouseworkStatistics();
 
-        // 更新首页的待办家务数量
-        const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
-        const homePendingHousework = document.getElementById('homePendingHousework');
-        if (homePendingHousework) {
-          homePendingHousework.textContent = `${pendingHousework}项`;
-        }
+        // 更新首页的家务连续完成天数
+        updateHomeHouseworkStreak();
 
         AppHelper.showNotification('成功', '家务已开始进行', 'success');
       }
@@ -11246,12 +10410,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         renderRecentHousework();
         updateHouseworkStatistics();
 
-        // 更新首页的待办家务数量
-        const pendingHousework = houseworkData.tasks.filter(t => t.status === 'pending').length;
-        const homePendingHousework = document.getElementById('homePendingHousework');
-        if (homePendingHousework) {
-          homePendingHousework.textContent = `${pendingHousework}项`;
-        }
+        // 更新首页的家务连续完成天数
+        updateHomeHouseworkStreak();
 
         AppHelper.showNotification('成功', '家务已完成', 'success');
       }
@@ -11682,43 +10842,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       `;
     }
 
-    // 筛选家务
-    function filterHousework(status, searchInputId, priorityFilterId, typeFilterId, overdueFilterId) {
-      const searchQuery = document.getElementById(searchInputId)?.value.toLowerCase() || '';
-      const priorityFilter = document.getElementById(priorityFilterId)?.value || 'all';
-      const typeFilter = document.getElementById(typeFilterId)?.value || 'all';
-      const overdueFilter = overdueFilterId ? document.getElementById(overdueFilterId)?.value || 'all' : 'all';
-
-      return houseworkData.tasks.filter(task => {
-        if (task.status !== status) return false;
-
-        const matchesSearch = task.title.toLowerCase().includes(searchQuery) ||
-                           (task.description && task.description.toLowerCase().includes(searchQuery));
-
-        const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
-        const matchesType = typeFilter === 'all' || task.type === typeFilter;
-        
-        // 逾期状态筛选
-        let matchesOverdue = true;
-        if (overdueFilter !== 'all') {
-          const isOverdue = isHouseworkOverdue(task);
-          matchesOverdue = (overdueFilter === 'overdue' && isOverdue) || (overdueFilter === 'normal' && !isOverdue);
-        }
-
-        return matchesSearch && matchesPriority && matchesType && matchesOverdue;
-      }).sort((a, b) => {
-        // 优先按逾期状态排序，逾期的在前
-        const aOverdue = isHouseworkOverdue(a);
-        const bOverdue = isHouseworkOverdue(b);
-        if (aOverdue && !bOverdue) return -1;
-        if (!aOverdue && bOverdue) return 1;
-        
-        // 然后按优先级排序
-        const priorityOrder = { high: 0, medium: 1, low: 2 };
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
-      });
-    }
-
     // 渲染家务列表
     function renderHouseworkList(container, tasks, status) {
       if (tasks.length === 0) {
@@ -11916,59 +11039,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     // 关闭家务模态框
     function closeHouseworkModal(modalId) {
       AppHelper.closeModal(modalId);
-    }
-
-    // 导出家务数据
-    function exportHouseworkData() {
-      AppHelper.exportData(houseworkData, `housework-data-${new Date().toISOString().split('T')[0]}.json`);
-    }
-
-    // 导入家务数据
-    function importHouseworkData(e) {
-      AppHelper.importData(e, function(importedData) {
-        // 【数据安全修复】先校验结构
-        const check = AppHelper.validateModule('houseworkData', importedData);
-        if (!check.ok) {
-          AppHelper.showNotification('导入已取消', '文件结构不正确：' + check.errors.slice(0, 3).join('；'), 'error');
-          return;
-        }
-        // 【XSS 修复】清理 id，防止 onclick / data-* 属性注入
-        AppHelper.sanitizeIds('houseworkData', importedData);
-        const total = (importedData.tasks || []).length;
-        if (total === 0) {
-          AppHelper.showNotification('导入已取消', '该文件不含任何家务任务。为避免误清空云端数据，已拒绝导入。', 'error');
-          return;
-        }
-
-        // 【数据安全修复】补上确认框（原来完全没有）
-        showConfirmDialog(
-          '导入家务数据',
-          `将用文件中的 ${total} 条任务覆盖当前家务模块。覆盖前会自动把现有数据备份到云端。确定继续吗？`,
-          async function() {
-            await AppHelper.backupBeforeImport('houseworkData', {
-              tasks: houseworkData.tasks, types: houseworkData.types
-            });
-
-            houseworkData.tasks = importedData.tasks || [];
-            houseworkData.types = importedData.types || [];
-
-            // 【数据安全修复】以真实写入结果决定提示
-            const ok = await saveHouseworkData();
-            if (!ok) {
-              AppHelper.showNotification('导入未生效', '数据未写入云端（可能是网络异常，或其它页面已修改数据）。当前家务数据没有被覆盖，请刷新后重试。', 'error');
-              return;
-            }
-            updateHouseworkDashboard();
-            renderPendingHousework();
-            renderInProgressHousework();
-            renderCompletedHousework();
-            renderOverdueHousework();
-            renderRecentHousework();
-            updateHouseworkStatistics();
-            AppHelper.showNotification('成功', '家务数据已导入（原数据已自动备份）', 'success');
-          }
-        );
-      });
     }
 
     // 初始化家务图表
@@ -12183,12 +11253,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       --app-border: #e6e8ee;
       --app-border-strong: #d5d9e3;
       --app-surface: rgba(255, 255, 255, 0.86);
-      --app-surface-solid: #ffffff;
       --app-shadow: 0 1px 2px rgba(17, 24, 39, .04), 0 8px 24px -14px rgba(17, 24, 39, .18);
       --app-shadow-hover: 0 2px 6px rgba(17, 24, 39, .06), 0 18px 40px -18px rgba(79, 70, 229, .30);
       --app-ring: 0 0 0 3px rgba(99, 102, 241, .16);
       --app-ink: #1f2430;
-      --app-muted: #6b7280;
     }
 
     /* ---------- 1. 基础排版 ---------- */
@@ -12202,9 +11270,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     }
 
     /* 金额/数字统一等宽，避免数值跳动时左右抖动 */
-    .tabular, table td, table th,
-    #monthlyIncome, #monthlyExpense, #monthlyBalance,
-    #yearlyExpense, #yearlyBalance, #homeYearlyExpense, #homeYearlyBalance,
+    table td, table th,
+    #monthlyIncome, #monthlyExpense,
+    #homeYearlyExpense, #homeYearlyBalance,
     #totalBudget, #usedBudget, #remainingBudget {
       font-variant-numeric: tabular-nums;
     }
@@ -12232,13 +11300,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     nav.sticky button, header.sticky button { white-space: nowrap; }
 
     /* ---------- 3. 卡片 ---------- */
-    .shadow-card, .shadow-soft {
+    .shadow-card {
       border-radius: var(--app-radius-lg) !important;
       box-shadow: var(--app-shadow) !important;
       border: 1px solid var(--app-border) !important;
       transition: box-shadow .25s ease, transform .25s ease;
     }
-    .shadow-card:hover, .shadow-soft:hover { box-shadow: var(--app-shadow-hover) !important; }
+    .shadow-card:hover { box-shadow: var(--app-shadow-hover) !important; }
 
     /* 统计卡片：降低过度饱和的彩色投影，改用克制的悬浮反馈 */
     .group.shadow-lg, .hover\\:shadow-xl {
@@ -12276,14 +11344,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     table tbody tr:last-child td { border-bottom: none; }
     table tbody tr { transition: background-color .15s ease; }
     table tbody tr:hover { background: #fafbff; }
-
-    /* 窄屏下表格可横向滚动，而不是把列挤扁 */
-    .table-scroll {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: thin;
-    }
-    .table-scroll > table { min-width: 560px; }
 
     /* ---------- 5. 表单控件 ---------- */
     input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -12391,4 +11451,29 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
     }
   </style>
+
+  <script>
+    // 首页统计卡占位符兜底
+    // 三张卡的数据分别由「财务 / 学习 / 家务」模块在各自数据加载完成后写入，写入前显示「--」，
+    // 避免首页先闪一个假的 0。若某个模块的脚本因 CDN 被拦截等原因没跑起来，
+    // 这里在页面完全加载后兜底落成 0，防止整页看起来像卡死。
+    (function () {
+      var FALLBACK = {
+        homeYearlyExpense: '¥0.00',
+        homeYearlyBalance: '¥0.00',
+        homeYearlyStudyHours: '0小时',
+        homeHouseworkStreak: '0天'
+      };
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          Object.keys(FALLBACK).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && el.textContent.trim() === '--') {
+              el.textContent = FALLBACK[id];
+            }
+          });
+        }, 4000);
+      });
+    })();
+  </script>
 </body></html>
