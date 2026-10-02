@@ -5849,10 +5849,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="houseworkTabNav" role="tablist">
           <li class="mr-2" role="presentation">
             <button class="inline-block p-4 border-b-2 border-emerald-600 text-emerald-700 rounded-t-lg active" id="houseworkTodayTab" data-tab="today" type="button" role="tab" aria-selected="true">
-              <i class="fa fa-sun-o mr-1"></i> 今天
+              <i class="fa fa-home mr-1"></i> 家务
             </button>
           </li>
-          <li role="presentation">
+          <li class="mr-2" role="presentation">
             <button class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg" id="houseworkStatsTab" data-tab="stats" type="button" role="tab" aria-selected="false">
               <i class="fa fa-bar-chart mr-1"></i> 统计
             </button>
@@ -5880,8 +5880,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
                 </div>
                 <div class="flex items-center gap-3 flex-shrink-0">
                   <div id="houseworkMapDots" class="hidden sm:flex items-center gap-1.5"></div>
-                  <button id="houseworkTodayAddBtn" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium flex items-center">
-                    <i class="fa fa-plus mr-1 text-xs"></i>添加家务
+                  <button id="houseworkManageBtn" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium flex items-center">
+                    <i class="fa fa-list-ul mr-1 text-xs"></i>家务管理
                   </button>
                 </div>
               </div>
@@ -6018,7 +6018,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
   <!-- 学习管理模态框 -->
   <!-- 月计划模态框 -->
   <div id="monthlyPlanModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 animate-slide-up overflow-y-auto max-h-[90vh]">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl animate-slide-up flex flex-col max-h-[90vh] overflow-hidden">
+      <div class="overflow-y-auto min-h-0 p-6">
       <div class="flex justify-between items-center mb-4">
         <h3 class="text-lg font-bold text-gray-800" id="monthlyPlanModalTitle">添加月计划</h3>
         <button class="text-gray-500 hover:text-gray-700" onclick="closeModal('monthlyPlanModal')">
@@ -6080,12 +6081,14 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">保存月计划</button>
         </div>
       </form>
+      </div>
     </div>
   </div>
 
   <!-- 周计划模态框 -->
   <div id="weeklyPlanModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 animate-slide-up overflow-y-auto max-h-[90vh]">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl animate-slide-up flex flex-col max-h-[90vh] overflow-hidden">
+      <div class="overflow-y-auto min-h-0 p-6">
       <div class="flex justify-between items-center mb-4">
         <h3 class="text-lg font-bold text-gray-800" id="weeklyPlanModalTitle">添加周计划</h3>
         <button class="text-gray-500 hover:text-gray-700" onclick="closeModal('weeklyPlanModal')">
@@ -6174,6 +6177,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">保存周计划</button>
         </div>
       </form>
+      </div>
     </div>
   </div>
 
@@ -6234,14 +6238,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
   <!-- 家务管理模态框 -->
   <div id="addHouseworkModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slide-up">
-      <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
+      <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 flex-shrink-0">
         <h3 class="text-lg font-bold text-gray-800" id="houseworkModalTitle">添加家务</h3>
         <button type="button" class="text-gray-400 hover:text-gray-600 p-1" onclick="closeHouseworkModal('addHouseworkModal')">
           <i class="fa fa-times text-lg"></i>
         </button>
       </div>
 
+      <div class="overflow-y-auto min-h-0">
       <form id="houseworkForm" class="px-6 py-5">
         <input type="hidden" id="houseworkId">
         <input type="hidden" id="houseworkCreatedAt">
@@ -6352,6 +6357,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           <button type="submit" class="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium shadow-lg shadow-emerald-500/30 transition-all">保存</button>
         </div>
       </form>
+      </div>
     </div>
   </div>
 
@@ -9742,8 +9748,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       hwUpdateTrendChart();
     }
 
+    // 统计口径：只算「清单里还存在的家务」的完成记录。
+    // 删掉的家务，其历史记录不再计入，数字才和清单、和眼前看到的东西对得上
+    function hwAliveHistory() {
+      const alive = new Set(houseworkData.tasks.map(t => t.id));
+      return houseworkData.history.filter(h => !h.taskId || alive.has(h.taskId));
+    }
+
     function hwCompletedOn(dateStr, memberId) {
-      return houseworkData.history.filter(h =>
+      return hwAliveHistory().filter(h =>
         hwDateStr(h.at) === dateStr && (!memberId || h.memberId === memberId)
       ).length;
     }
@@ -9788,7 +9801,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
 
       // 加一项（添加家务）
-      document.getElementById('houseworkTodayAddBtn')?.addEventListener('click', () => openHouseworkModal());
+      document.getElementById('houseworkManageBtn')?.addEventListener('click', hwOpenManageDialog);
 
       // 表单
       document.getElementById('houseworkForm')?.addEventListener('submit', saveHousework);
@@ -9891,7 +9904,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     // 今天要做的（含今天已完成的）
     function hwTodayTasks() {
       return houseworkData.tasks.filter(t => {
-        if (hwIsFinished(t)) return false;
+        // 一次性家务今天做完就「结束」了，但今天页要继续认账，否则进度环/点亮/统计对不上
+        if (hwIsFinished(t)) return hwIsDoneToday(t);
         if (hwIsDoneToday(t)) return true;
         const due = hwGetDue(t);
         if (!due) return true;
@@ -10020,7 +10034,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const summaryEl = document.getElementById('houseworkMapSummary');
       if (summaryEl) {
         if (!active.length) summaryEl.textContent = '今天家里没事，轻松';
-        else if (lit === active.length) summaryEl.textContent = '家里全亮了，干得漂亮';
+        else if (lit === active.length) summaryEl.textContent = '今日家务已做完，干得漂亮';
         else summaryEl.textContent = `${lit} / ${active.length} 间已点亮`;
       }
 
@@ -10155,7 +10169,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       if (statToday) statToday.textContent = hwCompletedOn(todayStr);
 
       const statMonth = document.getElementById('houseworkStatMonth');
-      if (statMonth) statMonth.textContent = houseworkData.history.filter(h => hwDateStr(h.at).startsWith(monthPrefix)).length;
+      if (statMonth) statMonth.textContent = hwAliveHistory().filter(h => hwDateStr(h.at).startsWith(monthPrefix)).length;
 
       const statStreak = document.getElementById('houseworkStatStreak');
       if (statStreak) statStreak.textContent = calculateHouseworkCompletionStreak();
@@ -10171,7 +10185,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const box = document.getElementById('houseworkMemberReport');
       if (!box) return;
 
-      const monthLogs = houseworkData.history.filter(h => hwDateStr(h.at).startsWith(monthPrefix));
+      const monthLogs = hwAliveHistory().filter(h => hwDateStr(h.at).startsWith(monthPrefix));
       const counts = {};
       houseworkData.members.forEach(m => { counts[m.id] = 0; });
       let unassigned = 0;
@@ -10181,9 +10195,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         else unassigned++;
       });
 
+      // 全家人都列出来（包括 0 次的），谁在出力、谁在偷懒一眼看清
       const rows = houseworkData.members
         .map(m => ({ member: m, count: counts[m.id] || 0 }))
-        .filter(r => r.count > 0)
         .sort((a, b) => b.count - a.count);
 
       const total = monthLogs.length;
@@ -10197,12 +10211,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return;
       }
 
-      const maxCount = rows.length ? rows[0].count : 1;
+      const maxCount = Math.max(1, rows.length ? rows[0].count : 1);
 
       box.innerHTML = rows.map(({ member, count }) => {
         const c = hwMemberColor(member);
         const pct = Math.round((count / total) * 100);
-        const barW = Math.max(4, Math.round((count / maxCount) * 100));
+        const barW = count ? Math.max(4, Math.round((count / maxCount) * 100)) : 0;
         return `
           <div>
             <div class="flex items-center gap-3 mb-1.5">
@@ -10219,80 +10233,147 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       ` : '');
     }
 
+    /* ---------- 家务管理弹窗 ---------- */
+
+    // 管理全部家务：分「周期性」「一次性」两组，可编辑/删除/新增
+    function hwOpenManageDialog() {
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[60] flex items-center justify-center p-4';
+      document.body.appendChild(overlay);
+
+      const rowHtml = t => {
+        const meta = HW_TYPE_META[t.type || 'other'] || HW_TYPE_META.other;
+        const member = hwMemberById(t.memberId);
+        const finished = hwIsFinished(t);
+        const doneToday = hwIsDoneToday(t);
+        const lastDone = t.lastDoneAt || t.completedAt;
+        const due = hwGetDue(t);
+
+        let sub;
+        if (hwIsRepeating(t)) {
+          sub = esc(hwRepeatLabel(t.repeat)) + (lastDone ? ` · 上次 ${hwHumanAgo(lastDone)}` : ' · 还没做过');
+        } else if (finished) {
+          sub = lastDone ? `${hwHumanAgo(lastDone)}完成` : '已完成';
+        } else {
+          sub = due ? `期限 ${hwDueShort(due)}` : '一次性，想起来做一次';
+        }
+
+        const titleCls = finished ? 'text-gray-400 line-through' : doneToday ? 'text-emerald-700' : 'text-gray-800';
+        const urgentFlag = !finished && !doneToday && t.priority === 'high'
+          ? '<span class="px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-medium flex-shrink-0">比较急</span>' : '';
+
+        return `
+          <div class="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50">
+            <div class="w-8 h-8 rounded-lg bg-white border border-gray-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+              <i class="fa ${meta.icon} text-sm"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <p class="text-sm font-medium truncate ${titleCls}">${esc(t.title)}</p>
+                ${urgentFlag}
+              </div>
+              <p class="text-xs text-gray-400 mt-0.5 truncate">${sub}</p>
+            </div>
+            ${hwMemberBadge(member)}
+            <button type="button" class="w-7 h-7 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" data-hw-manage-del="${esc(t.id)}" title="删除">
+              <i class="fa fa-trash-o text-xs"></i>
+            </button>
+          </div>`;
+      };
+
+      const paint = () => {
+        const repeating = houseworkData.tasks.filter(t => hwIsRepeating(t) && !hwIsFinished(t));
+        const oneTimeAll = houseworkData.tasks.filter(t => !hwIsRepeating(t));
+        const oneTime = oneTimeAll.filter(t => !hwIsFinished(t))
+          .concat(oneTimeAll.filter(t => hwIsFinished(t))
+            .sort((a, b) => hwParse(b.lastDoneAt || b.completedAt || 0) - hwParse(a.lastDoneAt || a.completedAt || 0)));
+
+        overlay.innerHTML = `
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-slide-up">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-gray-800">家务管理</h3>
+              <span class="text-xs text-gray-400">周期 ${repeating.length} 项 · 一次性 ${oneTimeAll.length} 项</span>
+            </div>
+            <div class="max-h-[60vh] overflow-y-auto space-y-4">
+              <div>
+                <p class="text-xs font-medium text-gray-400 mb-2">周期性家务</p>
+                <div class="space-y-2">
+                  ${repeating.length ? repeating.map(rowHtml).join('') : '<p class="text-sm text-gray-400 py-3 text-center bg-gray-50 rounded-xl">还没有周期性家务</p>'}
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 mb-2">一次性家务</p>
+                <div class="space-y-2">
+                  ${oneTime.length ? oneTime.map(rowHtml).join('') : '<p class="text-sm text-gray-400 py-3 text-center bg-gray-50 rounded-xl">还没有一次性家务</p>'}
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-between items-center mt-5 pt-4 border-t border-gray-100">
+              <button type="button" id="hwManageAdd" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium">
+                <i class="fa fa-plus mr-1 text-xs"></i>添加家务
+              </button>
+              <button type="button" id="hwManageDone" class="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors">完成</button>
+            </div>
+          </div>`;
+      };
+      paint();
+
+      overlay.addEventListener('click', ev => {
+        if (ev.target === overlay) { overlay.remove(); return; }
+        const delBtn = ev.target.closest('[data-hw-manage-del]');
+        if (delBtn) {
+          deleteHousework(delBtn.dataset.hwManageDel).then(paint);
+          return;
+        }
+        if (ev.target.closest('#hwManageAdd')) {
+          overlay.remove();
+          openHouseworkModal();
+          return;
+        }
+        if (ev.target.closest('#hwManageDone')) overlay.remove();
+      });
+    }
+
     /* ---------- 头部与首页 ---------- */
 
     function hwUpdateHeaderSummary() {
       const el = document.getElementById('houseworkHeaderSummary');
       if (!el) return;
-      const pending = hwTodayTasks().filter(t => !hwIsDoneToday(t)).length;
-      el.textContent = pending > 0 ? `今天还有 ${pending} 项要做` : '今天的家务都完成了';
+      const todayList = hwTodayTasks();
+      const pending = todayList.filter(t => !hwIsDoneToday(t)).length;
+      if (pending > 0) {
+        el.textContent = `今天还有 ${pending} 项要做`;
+      } else if (!todayList.length) {
+        // 今天压根没排家务
+        el.textContent = '今日暂无家务';
+      } else {
+        // 今天的都做完了
+        el.textContent = '今日再无家务';
+      }
     }
 
-    // 周期任务在某天是否排了班（按创建日锚定，近似还原历史排期：
-    // interval 类以创建日为起点推算，与「完成后顺延」的实际节奏可能有细微出入）
-    function hwScheduledOn(task, day) {
-      if (!hwIsRepeating(task)) return false;
-      const created = hwParse(task.createdAt);
-      if (created && hwStartOfDay(day) < hwStartOfDay(created)) return false;
-      const r = task.repeat;
-      if (r.freq === 'daily') return true;
-      if (r.freq === 'interval') {
-        const n = Math.max(1, parseInt(r.interval, 10) || 1);
-        if (!created) return true;
-        const diff = Math.floor((hwStartOfDay(day) - hwStartOfDay(created)) / 86400000);
-        return diff >= 0 && diff % n === 0;
-      }
-      if (r.freq === 'weekly') {
-        const days = (r.weekdays || []).map(Number);
-        return days.length ? days.includes(day.getDay()) : true;
-      }
-      if (r.freq === 'monthly') {
-        return day.getDate() === Math.min(31, Math.max(1, parseInt(r.monthday, 10) || 1));
-      }
-      return false;
-    }
-
-    // 连续全勤天数：连续每天「当天该做的家务全部做完」；
-    // 没排任务的日子是休息日，不断签；今天还没做完不打断，从昨天起算。
-    // 没有任何周期家务时，退回「当天有完成记录」口径
+    // 连续全勤天数 = 连续「当天有完成记录」的天数。
+    // 口径简单可核对：只要当天做过家务就算这天，今天还没做不算断签（从昨天往前数）。
+    // 同样只算清单里还存在的家务，删掉的家务不算数。
     function calculateHouseworkCompletionStreak() {
-      const doneByDate = {};
-      const mark = (taskId, at) => {
-        const s = hwDateStr(at);
-        if (!s || !taskId) return;
-        (doneByDate[s] = doneByDate[s] || new Set()).add(taskId);
-      };
-      houseworkData.history.forEach(h => mark(h.taskId, h.at));
-      houseworkData.tasks.forEach(t => mark(t.id, t.completedAt));
+      const days = new Set();
+      hwAliveHistory().forEach(h => {
+        const s = hwDateStr(h.at);
+        if (s) days.add(s);
+      });
+      // 任务自身的完成时间也记一笔（防止历史记录缺失时漏算）
+      houseworkData.tasks.forEach(t => {
+        const s = hwDateStr(t.lastDoneAt || t.completedAt);
+        if (s) days.add(s);
+      });
+      if (!days.size) return 0;
 
-      const repeating = houseworkData.tasks.filter(hwIsRepeating);
-      if (!repeating.length) {
-        const dates = Object.keys(doneByDate);
-        if (!dates.length) return 0;
-        let streak = 0;
-        const cursor = new Date();
-        if (!doneByDate[hwDateStr(cursor)]) cursor.setDate(cursor.getDate() - 1);
-        while (doneByDate[hwDateStr(cursor)]) {
-          streak++;
-          cursor.setDate(cursor.getDate() - 1);
-        }
-        return streak;
-      }
-
-      const dayFullyDone = (d) => {
-        const scheduled = repeating.filter(t => hwScheduledOn(t, d));
-        if (!scheduled.length) return null; // 休息日
-        const doneSet = doneByDate[hwDateStr(d)] || new Set();
-        return scheduled.every(t => doneSet.has(t.id));
-      };
-
-      let streak = 0;
       const cursor = new Date();
-      if (dayFullyDone(cursor) === false) cursor.setDate(cursor.getDate() - 1);
+      if (!days.has(hwDateStr(cursor))) cursor.setDate(cursor.getDate() - 1);
+      let streak = 0;
       for (let guard = 0; guard < 366; guard++) {
-        const ok = dayFullyDone(cursor);
-        if (ok === false) break;
-        if (ok === true) streak++;
+        if (!days.has(hwDateStr(cursor))) break;
+        streak++;
         cursor.setDate(cursor.getDate() - 1);
       }
       return streak;
