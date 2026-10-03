@@ -5742,6 +5742,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               <i class="fa fa-check-circle text-green-500 mr-1"></i>
               已记录本次学习：<span id="studyTimerResultText" class="font-semibold text-indigo-600"></span>，选好课程和内容后点下方保存。
             </div>
+            <!-- 【跨设备计时】计时进行中：常驻显示本次课程和学习内容，关闭浏览器/换设备也不消失 -->
+            <div id="studySessionInfo" class="hidden mt-3 pt-3 border-t border-indigo-100 text-sm text-gray-700">
+              <i class="fa fa-book-open text-indigo-500 mr-1"></i>
+              正在学习：<span id="studySessionCourseText" class="font-semibold text-indigo-600"></span>
+              <span class="text-gray-400 mx-1">·</span>
+              <span id="studySessionContentText" class="font-medium text-gray-800"></span>
+            </div>
           </div>
 
           <!-- 时间部分 ②：手动补录（默认隐藏） -->
@@ -5958,6 +5965,22 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- 【跨设备计时】全局浮动计时条：学习中无论切到首页/财务/家务哪个界面都常驻显示 -->
+  <div id="studyFloatingTimer" class="hidden fixed bottom-4 right-4 z-50 cursor-pointer bg-indigo-600 text-white rounded-xl shadow-2xl px-4 py-3 flex items-center gap-3 hover:bg-indigo-700 transition-all duration-300 max-w-sm">
+    <span class="relative flex h-3 w-3 shrink-0">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-300 opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-3 w-3 bg-green-400"></span>
+    </span>
+    <div class="min-w-0">
+      <div class="flex items-baseline gap-2">
+        <span id="studyFloatingTimerElapsed" class="text-xl font-bold font-mono tabular-nums">00:00:00</span>
+        <span class="text-xs text-indigo-200">计时中</span>
+      </div>
+      <div id="studyFloatingTimerText" class="text-xs text-indigo-100 truncate"></div>
+    </div>
+    <i class="fa fa-arrow-circle-right text-indigo-200 shrink-0"></i>
   </div>
 
   <!-- 模块切换脚本 -->
@@ -6406,7 +6429,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         courses: [],
         records: [],
         monthlyPlans: [],
-        weeklyPlans: []
+        weeklyPlans: [],
+        activeSession: null
       });
 
       // 确保数据结构的完整性
@@ -6428,6 +6452,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       );
       studyData.monthlyPlans = Array.isArray(savedData.monthlyPlans) ? savedData.monthlyPlans : [];
       studyData.weeklyPlans = Array.isArray(savedData.weeklyPlans) ? savedData.weeklyPlans : [];
+      // 【跨设备计时】活动学习会话（课程+内容+开始时间戳）随云端数据加载，
+      // 换设备打开也能看到正在学的课程/内容并继续计时
+      const rawSession = savedData.activeSession;
+      studyData.activeSession = (rawSession && typeof rawSession === 'object'
+        && Number.isFinite(rawSession.start) && rawSession.start > 0
+        && typeof rawSession.courseId === 'string' && rawSession.courseId)
+        ? {
+            start: rawSession.start,
+            courseId: rawSession.courseId,
+            content: typeof rawSession.content === 'string' ? rawSession.content : ''
+          }
+        : null;
       // 【XSS 修复】加载时也清理 id：既防止 onclick 注入，也净化历史遗留的脏 id
       AppHelper.sanitizeIds('studyData', {
         plans: studyData.plans, courses: studyData.courses, records: studyData.records,
@@ -6442,9 +6478,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         courses: studyData.courses,
         records: studyData.records,
         monthlyPlans: studyData.monthlyPlans,
-        weeklyPlans: studyData.weeklyPlans
+        weeklyPlans: studyData.weeklyPlans,
+        activeSession: studyData.activeSession || null
       });
-      
+
       return result;
     }
 
@@ -6498,6 +6535,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
       // 【计时器】开始/结束学习一键切换
       document.getElementById('studyTimerBtn')?.addEventListener('click', toggleStudyTimer);
+
+      // 【跨设备计时】浮动计时条：任何界面点击都跳回学习打卡页
+      document.getElementById('studyFloatingTimer')?.addEventListener('click', () => {
+        document.getElementById('studyBtn')?.click();
+        switchStudyTab('records');
+      });
 
       // 课程筛选
       document.querySelectorAll('.course-filter').forEach(btn => {
@@ -6554,10 +6597,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       document.getElementById('recordStartTime').value = formatTime(now);
       document.getElementById('recordEndTime').value = formatTime(endTime);
       updateRecordDurationPreview(); // 【表单改进】初始默认时间下也显示时长
-      restoreStudyTimer(); // 【计时器】恢复上次未结束的计时（刷新不丢）
 
       updateCourseSelect();
       updateRecordMonthFilter(); // 初始化月份筛选器
+      restoreStudyTimer(); // 【计时器】恢复上次未结束的计时（放在课程下拉填充之后，才能回填所选课程）
 
       // 初始化学习记录年份和月份筛选器
       const yearFilter = document.getElementById('recordFilterYear');
@@ -7828,12 +7871,16 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       preview.textContent = crossMidnight ? `${durText}（跨零点）` : durText;
     }
 
-    // ===== 学习计时器 =====
-    // 【计时器】开始学习时记录时间点，结束学习时自动把起止时间填进表单。
-    // 开始时间写入 localStorage，页面刷新/误关不丢计时。
-    const STUDY_TIMER_KEY = 'studyTimerStart';
+    // ===== 学习计时器（跨设备云端版） =====
+    // 【跨设备计时】开始学习前必须先选好课程、填好学习内容，三者组成一个「学习会话」：
+    // - 会话开始时间戳写入云端 studyData.activeSession（localStorage 作离线兜底）
+    // - 时长 = 当前时间 - 开始时间戳：关闭浏览器、换设备打开，时钟照样继续走，计时不会停
+    // - 课程和学习内容常驻显示在计时区 + 全局浮动计时条，任何界面都能看到
+    const STUDY_TIMER_KEY = 'studyTimerStart';        // 兼容旧版：裸开始时间戳
+    const STUDY_SESSION_KEY = 'studyTimerSession';    // 新版：完整会话 JSON（含课程/内容）
     let studyTimerStart = null;
     let studyTimerInterval = null;
+    let studyActiveSession = null; // { start, courseId, content }
 
     function formatStudyTimerElapsed(ms) {
       const totalSeconds = Math.floor(ms / 1000);
@@ -7841,6 +7888,49 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
       const s = (totalSeconds % 60).toString().padStart(2, '0');
       return `${h}:${m}:${s}`;
+    }
+
+    function getStudyCourseName(courseId) {
+      const c = studyData.courses.find(x => x.id === courseId);
+      return c ? (c.name || c.title || '未命名课程') : '已删除的课程';
+    }
+
+    // 【跨设备计时】把会话持久化：云端为主，localStorage 兜底（存完整会话，离线/刷新也不丢课程和内容）
+    function persistStudySession() {
+      try {
+        if (studyActiveSession) {
+          localStorage.setItem(STUDY_TIMER_KEY, String(studyActiveSession.start));
+          localStorage.setItem(STUDY_SESSION_KEY, JSON.stringify(studyActiveSession));
+        } else {
+          localStorage.removeItem(STUDY_TIMER_KEY);
+          localStorage.removeItem(STUDY_SESSION_KEY);
+        }
+      } catch (e) { /* file:// 下 localStorage 可能受限，忽略 */ }
+      // 云端写入异步进行：失败也不影响本机计时，之后的任何一次保存都会把会话带上云
+      saveStudyData().catch(() => {});
+    }
+
+    // 常驻显示：计时区内的「正在学习」行 + 全局浮动计时条
+    function updateStudySessionDisplays() {
+      const info = document.getElementById('studySessionInfo');
+      const courseText = document.getElementById('studySessionCourseText');
+      const contentText = document.getElementById('studySessionContentText');
+      if (studyActiveSession) {
+        if (courseText) courseText.textContent = getStudyCourseName(studyActiveSession.courseId);
+        if (contentText) contentText.textContent = studyActiveSession.content || '（未填写内容）';
+        if (info) info.classList.remove('hidden');
+      } else {
+        if (info) info.classList.add('hidden');
+      }
+
+      const floatBar = document.getElementById('studyFloatingTimer');
+      const floatText = document.getElementById('studyFloatingTimerText');
+      if (studyActiveSession) {
+        if (floatText) floatText.textContent = `${getStudyCourseName(studyActiveSession.courseId)} · ${studyActiveSession.content || '未填写内容'}`;
+        if (floatBar) floatBar.classList.remove('hidden');
+      } else {
+        if (floatBar) floatBar.classList.add('hidden');
+      }
     }
 
     function resetStudyTimerUI() {
@@ -7860,44 +7950,110 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const btn = document.getElementById('studyTimerBtn');
       const display = document.getElementById('studyTimerDisplay');
       const badge = document.getElementById('studyTimerRunningBadge');
+      const floatElapsed = document.getElementById('studyFloatingTimerElapsed');
       if (!btn) return;
       btn.innerHTML = '<i class="fa fa-stop mr-1"></i>结束学习';
       btn.classList.remove('bg-green-500', 'hover:bg-green-600');
       btn.classList.add('bg-red-500', 'hover:bg-red-600');
       if (badge) badge.classList.remove('hidden');
+      updateStudySessionDisplays();
       const tick = () => {
-        if (display) display.textContent = formatStudyTimerElapsed(Date.now() - studyTimerStart);
+        const text = formatStudyTimerElapsed(Date.now() - studyTimerStart);
+        if (display) display.textContent = text;
+        if (floatElapsed) floatElapsed.textContent = text;
       };
       tick();
       if (studyTimerInterval) clearInterval(studyTimerInterval);
       studyTimerInterval = setInterval(tick, 1000);
     }
 
-    // 页面加载时恢复未结束的计时（防止刷新后计时丢失）
+    // 页面加载时恢复未结束的学习会话：云端优先，localStorage 兜底。
+    // 无论隔了多久、在哪台设备打开，时钟都按开始时间戳继续走（计时不停）
     function restoreStudyTimer() {
-      const saved = localStorage.getItem(STUDY_TIMER_KEY);
-      if (!saved) return;
-      const start = parseInt(saved);
-      if (!isNaN(start) && start > 0) {
-        studyTimerStart = start;
-        startStudyTimerUI();
-        AppHelper.showNotification('计时已恢复', '检测到上次未结束的学习计时，已继续计时。', 'info');
+      let session = studyData.activeSession || null;
+      let fromCloud = !!session;
+
+      if (!session) {
+        // 离线兜底：优先读完整会话 JSON（含课程/内容），再兼容旧版裸时间戳
+        try {
+          const rawSession = localStorage.getItem(STUDY_SESSION_KEY);
+          if (rawSession) {
+            const parsed = JSON.parse(rawSession);
+            if (parsed && typeof parsed === 'object' && Number.isFinite(parsed.start) && parsed.start > 0) {
+              session = {
+                start: parsed.start,
+                courseId: typeof parsed.courseId === 'string' ? parsed.courseId : '',
+                content: typeof parsed.content === 'string' ? parsed.content : ''
+              };
+            }
+          }
+          if (!session) {
+            const saved = localStorage.getItem(STUDY_TIMER_KEY);
+            if (saved) {
+              const start = parseInt(saved);
+              if (!isNaN(start) && start > 0) {
+                session = { start, courseId: '', content: '' };
+              }
+            }
+          }
+        } catch (e) { /* 忽略 */ }
+      }
+
+      if (!session) return;
+
+      studyActiveSession = session;
+      studyTimerStart = session.start;
+      startStudyTimerUI();
+
+      // 把会话里的课程和内容回填到表单：打开页面就能看到正在学什么
+      if (session.courseId) {
+        const courseSelect = document.getElementById('recordCourse');
+        if (courseSelect) courseSelect.value = session.courseId;
+      }
+      if (session.content) {
+        const contentInput = document.getElementById('recordContent');
+        if (contentInput) contentInput.value = session.content;
+      }
+
+      if (fromCloud) {
+        AppHelper.showNotification('计时已恢复', `检测到云端有未结束的学习计时（${getStudyCourseName(session.courseId)}），已继续计时。`, 'info');
+      } else {
+        AppHelper.showNotification('计时已恢复', '检测到本机有未结束的学习计时，已继续计时。', 'info');
       }
     }
 
     function toggleStudyTimer() {
       if (studyTimerStart) {
         stopStudyTimer();
-      } else {
-        // 开始新一轮计时：收起上一轮结果条（未保存的计时结果作废）
-        studyTimerRecordPending = null;
-        const result = document.getElementById('studyTimerResult');
-        if (result) result.classList.add('hidden');
-        studyTimerStart = Date.now();
-        localStorage.setItem(STUDY_TIMER_KEY, String(studyTimerStart));
-        startStudyTimerUI();
-        AppHelper.showNotification('计时开始', '加油！学完点「结束学习」，再选好课程和内容保存即可。', 'info');
+        return;
       }
+
+      // 【跨设备计时】开始前必须选好课程、填好学习内容：它们会常驻显示并跟着会话上云
+      const courseSelect = document.getElementById('recordCourse');
+      const contentInput = document.getElementById('recordContent');
+      const courseId = courseSelect ? courseSelect.value : '';
+      const content = contentInput ? contentInput.value.trim() : '';
+      if (!courseId) {
+        AppHelper.showNotification('提示', '开始前请先在下方选择课程；还没有课程的话，先去「我的课程」添加。', 'error');
+        courseSelect?.focus();
+        return;
+      }
+      if (!content) {
+        AppHelper.showNotification('提示', '开始前请先在下方填写学习内容，比如「中药二 第3章 理气药」。', 'error');
+        contentInput?.focus();
+        return;
+      }
+
+      // 开始新一轮计时：收起上一轮结果条（未保存的计时结果作废）
+      studyTimerRecordPending = null;
+      const result = document.getElementById('studyTimerResult');
+      if (result) result.classList.add('hidden');
+
+      studyActiveSession = { start: Date.now(), courseId, content };
+      studyTimerStart = studyActiveSession.start;
+      persistStudySession();
+      startStudyTimerUI();
+      AppHelper.showNotification('计时开始', `正在学习「${getStudyCourseName(courseId)}」：${content}。关掉浏览器或换设备打开，计时都会继续。`, 'success');
     }
 
     function stopStudyTimer() {
@@ -7910,7 +8066,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       if (studyTimerInterval) clearInterval(studyTimerInterval);
       studyTimerInterval = null;
       studyTimerStart = null;
-      localStorage.removeItem(STUDY_TIMER_KEY);
+      studyActiveSession = null;
+      persistStudySession();
+      updateStudySessionDisplays();
 
       // 超过 24 小时：基本是忘记关计时器了，按天记的起止时间（HH:MM）无法准确表达，
       // 丢弃本次计时避免写出错误时长
@@ -9962,8 +10120,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       hwNoticeSignature = signature;
 
       const names = overdue.slice(0, 3).map(t => `「${esc(t.title)}」`).join('、');
+      const cnNum = (n) => ['零','一','两','三','四','五','六','七','八','九','十'][n] || n;
       const overdueLine = overdue.length
-        ? `<p class="text-sm font-medium text-red-700">${overdue.length} 项拖期了：${names}${overdue.length > 3 ? ' 等' : ''}</p>`
+        ? `<p class="text-sm font-medium text-red-700">${cnNum(overdue.length)}项该做了：${names}${overdue.length > 3 ? ' 等' : ''}</p>`
         : '';
       const staleLine = stale
         ? `<p class="text-xs text-red-500 mt-0.5">最久没做：「${esc(stale.t.title)}」已经 ${stale.fresh.days} 天了（${hwRepeatLabel(stale.t.repeat)}）</p>`
