@@ -2,19 +2,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>家庭信息管理系统</title>
+  <!-- 【安全加固】CSP：限制脚本只准来自本页/白名单 CDN、云连接只准 Supabase，注入脚本也难外传数据 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🏠</text></svg>" type="image/svg+xml">
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tailwind CSS（锁定 3.4.16；该 CDN 动态生成内容无法做 SRI，靠版本锁定+CSP 白名单约束） -->
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
   <!-- Font Awesome -->
-  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
   <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
-  <!-- SheetJS for Excel export -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" integrity="sha384-T/4KgSWuZEPozpPz7rnnp/5lDSnpY1VPJCojf1S81uTHS1E38qgLfMgVsAeRCWc4" crossorigin="anonymous"></script>
+  <!-- SheetJS for Excel export（0.20.3：修复 CVE-2023-30533 / CVE-2024-22363；npm 已停更，官方定版 CDN） -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
   
   <!-- Supabase SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js" integrity="sha384-wgi7s9Y2xefdDru3II6Xb11y/YNoKVbuydTikWejwId9z2xRd8SveCTrJjj/QAnH" crossorigin="anonymous"></script>
   
   <!-- Supabase 配置 - 请替换为您自己的 Supabase 项目配置 -->
   <script>
@@ -27,6 +29,76 @@
     
     // 共享数据标识（所有用户访问同一数据源）
     window.SHARED_DATA_ID = 'family_shared_data';
+  </script>
+
+  <!-- 【安全加固】登录认证逻辑：会话检查/登录/登出（与 Supabase RLS 行级安全配合） -->
+  <script>
+    (function() {
+      // DOM 解析完成后绑定（本脚本位于 head，元素尚未生成）
+      document.addEventListener('DOMContentLoaded', function() {
+        const gate = document.getElementById('authGate');
+        const form = document.getElementById('authLoginForm');
+        const errEl = document.getElementById('authError');
+        const btn = document.getElementById('authSubmitBtn');
+        if (!gate || !form) return;
+
+        const showGate = () => gate.classList.remove('hidden');
+        const hideGate = () => gate.classList.add('hidden');
+        window.authGate = { showGate, hideGate };
+
+        // 启动时检查会话：已登录（本机存有会话）则直接放行
+        (async function checkSession() {
+          try {
+            const { data, error } = await window.supabaseClient.auth.getSession();
+            if (!error && data && data.session && data.session.user) {
+              hideGate();
+              return;
+            }
+          } catch (e) {
+            console.error('检查登录状态失败:', e);
+          }
+          showGate();
+        })();
+
+        // 登录
+        form.addEventListener('submit', async function(ev) {
+          ev.preventDefault();
+          errEl.classList.add('hidden');
+          btn.disabled = true;
+          btn.innerHTML = '登录中...';
+          try {
+            const email = document.getElementById('authEmail').value.trim();
+            const password = document.getElementById('authPassword').value;
+            if (!email || !password) throw new Error('请输入邮箱和密码');
+            const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            if (data && data.session) {
+              btn.innerHTML = '登录成功，正在进入...';
+              setTimeout(() => location.reload(), 300); // 带会话重新初始化应用
+              return;
+            }
+            throw new Error('登录返回异常，请重试');
+          } catch (e) {
+            errEl.textContent = e && e.message ? ('登录失败：' + e.message) : '登录失败，请检查网络后重试';
+            errEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.innerHTML = '登录';
+          }
+        });
+
+        // 退出登录（导航栏按钮可能晚于本脚本生成，用事件委托）
+        document.addEventListener('click', async function(ev) {
+          if (!ev.target.closest('#logoutBtn')) return;
+          try { await window.supabaseClient.auth.signOut(); } catch (e) { /* 本就无会话时忽略 */ }
+          showGate();
+        });
+
+        // 会话过期/在其它设备退出登录时，重新亮出登录门
+        window.supabaseClient.auth.onAuthStateChange(function(evt) {
+          if (evt === 'SIGNED_OUT') showGate();
+        });
+      });
+    })();
   </script>
 
   <!-- 统一的 Tailwind 配置 -->
@@ -143,6 +215,38 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased selection:bg-primary selection:text-white">
   <div class="animated-background"></div>
+
+  <!-- 【安全加固】登录门：配合 Supabase Auth + RLS 行级安全。
+       未登录时全屏遮挡应用（默认显示），会话确认后放行；
+       会话由 supabase-js 自动保存在本机 localStorage，每台设备登录一次即可。 -->
+  <div id="authGate" class="fixed inset-0 z-[100] bg-gray-50 flex items-center justify-center px-4">
+    <div class="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+      <div class="text-center mb-6">
+        <div class="inline-block bg-primary/10 p-3 rounded-xl mb-3">
+          <i class="fa fa-lock text-primary text-2xl"></i>
+        </div>
+        <h1 class="text-lg font-bold text-gray-800">家庭信息管理系统</h1>
+        <p class="text-sm text-gray-500 mt-1">数据已加锁保护，请登录后使用</p>
+      </div>
+      <form id="authLoginForm" class="space-y-4" novalidate>
+        <div>
+          <label for="authEmail" class="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+          <input id="authEmail" type="email" required autocomplete="username" placeholder="请输入登录邮箱"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+        </div>
+        <div>
+          <label for="authPassword" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+          <input id="authPassword" type="password" required autocomplete="current-password" placeholder="请输入密码"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+        </div>
+        <p id="authError" class="hidden text-sm text-red-600"></p>
+        <button type="submit" id="authSubmitBtn"
+          class="w-full py-2.5 rounded-md bg-primary text-white font-medium hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+          登录
+        </button>
+      </form>
+    </div>
+  </div>
 
   
 
@@ -7814,6 +7918,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const select = document.getElementById('recordCourse');
       if (!select) return;
 
+      // 【选中保持】重建前记住当前选中：刷新/切页签重建下拉后课程不跳回第一门
+      const prevValue = select.value;
+
       // 【去除占位项】下拉直接列出课程，浏览器默认选中第一门，不再显示「选择课程」
       select.innerHTML = '';
       const activeCourses = studyData.courses.filter(c => c.status === 'active');
@@ -7823,6 +7930,14 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         option.textContent = course.name;
         select.appendChild(option);
       });
+
+      // 恢复选中：原选中还在 > 正在进行的学习会话课程 > 默认第一门
+      if (prevValue && activeCourses.some(c => c.id === prevValue)) {
+        select.value = prevValue;
+      } else if (typeof studyActiveSession !== 'undefined' && studyActiveSession
+        && activeCourses.some(c => c.id === studyActiveSession.courseId)) {
+        select.value = studyActiveSession.courseId;
+      }
 
       // 【表单改进】没有进行中的课程时：禁用下拉 + 显示引导提示（原先只是空白下拉，用户不知道要先去建课程）
       const emptyHint = document.getElementById('recordCourseEmptyHint');
@@ -9553,7 +9668,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       other: ['搞定一项，轻松一点', '又完成了一件']
     };
 
-    // 常用家务快捷项
     // 常用家务快捷项（按用户家实际情况定制）
     const HW_QUICK_PICKS = [
       { title: '打扫客厅', type: 'cleaning', room: '客厅', repeat: { freq: 'interval', interval: 2 } },
@@ -9563,8 +9677,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       { title: '做饭', type: 'cooking', room: '厨房', repeat: { freq: 'daily' } },
       { title: '打扫厨房', type: 'cleaning', room: '厨房', repeat: { freq: 'interval', interval: 2 } },
       { title: '倒垃圾', type: 'other', room: '厨房', repeat: { freq: 'daily' } },
-      { title: '周末大扫除', type: 'cleaning', room: '客厅', repeat: { freq: 'weekly', weekdays: [0, 6] } },
-      { title: '换床单', type: 'laundry', room: '主卧', repeat: { freq: 'interval', interval: 14 } }
+      { title: '周末大扫除', type: 'cleaning', room: '其他', repeat: { freq: 'weekly', weekdays: [0, 6] } },
+      { title: '购物', type: 'shopping', room: '其他', repeat: { freq: 'interval', interval: 2 } },
+      { title: '洗衣服', type: 'laundry', room: '卫生间', repeat: { freq: 'interval', interval: 2 } }
     ];
 
     let houseworkTrendChart = null;
@@ -9782,6 +9897,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       // 旧数据迁移：in-progress 状态、自由文本 assignee、缺失字段
       houseworkData.tasks = rawTasks.map(hwMigrateTask);
       hwEnsureMembers();
+
+      // 【负责人固定】补记录：lastDoneBy 引入前完成的任务，从历史里找回完成时的负责人
+      // （周期任务完成后负责人会轮值切换，task.memberId 已不是当时做的人；历史条目在轮值前写入，可信）
+      houseworkData.tasks.forEach(t => {
+        if (t.lastDoneAt && !t.lastDoneBy) {
+          const h = houseworkData.history
+            .filter(x => x && x.taskId === t.id && x.at === t.lastDoneAt && typeof x.memberId === 'string' && x.memberId)
+            .pop();
+          if (h) t.lastDoneBy = h.memberId;
+        }
+      });
 
       AppHelper.sanitizeIds('houseworkData', { tasks: houseworkData.tasks, members: houseworkData.members });
     }
@@ -10031,6 +10157,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const list = document.getElementById('houseworkRoomOptions');
       if (!list) return;
       const rooms = [...new Set([...houseworkData.rooms.map(r => r.name), ...houseworkData.tasks.map(t => t.room).filter(Boolean)])];
+      // 【快捷候选】区域输入候选追加「其他」，仅作为表单候选值，不写入房间列表
+      if (!rooms.includes('其他')) rooms.push('其他');
       list.innerHTML = rooms.map(r => `<option value="${esc(r)}"></option>`).join('');
     }
 
@@ -10277,6 +10405,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const done = hwIsDoneToday(task);
       const overdue = hwIsOverdue(task);
       const member = hwMemberById(task.memberId);
+      // 【完成人记录】做完的行尾头像显示实际完成的人（没记录时退回负责人，兼容旧数据）
+      const doer = hwMemberById(task.lastDoneBy || task.memberId);
 
       let flag = '';
       if (!done && overdue) {
@@ -10304,7 +10434,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             ${flag}${sub}
           </div>
           <div class="flex items-center gap-0.5 flex-shrink-0">
-            ${hwMemberBadge(member)}
+            ${hwMemberBadge(done ? doer : member)}
             ${done ? '' : `
               <button type="button" class="w-6 h-6 rounded-lg text-gray-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors" data-hw-action="snooze" data-hw-id="${esc(task.id)}" title="推迟到明天">
                 <i class="fa fa-clock-o text-xs"></i>
@@ -10402,9 +10532,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       const rowHtml = t => {
         const meta = HW_TYPE_META[t.type || 'other'] || HW_TYPE_META.other;
-        const member = hwMemberById(t.memberId);
         const finished = hwIsFinished(t);
         const doneToday = hwIsDoneToday(t);
+        // 【完成人记录】已做的行尾头像显示实际完成的人；未做的显示负责人
+        const member = (doneToday || finished) ? hwMemberById(t.lastDoneBy || t.memberId) : hwMemberById(t.memberId);
         const lastDone = t.lastDoneAt || t.completedAt;
         const due = hwGetDue(t);
 
@@ -10441,8 +10572,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       };
 
       const paint = () => {
-        const repeating = houseworkData.tasks.filter(t => hwIsRepeating(t) && !hwIsFinished(t));
-        const oneTimeAll = houseworkData.tasks.filter(t => !hwIsRepeating(t));
+        // 【用户要求】管理弹窗只显示「今日」的家务，与今天页平面图同一口径（hwTodayTasks）：
+        // 今天到期的、今天已做的、以及没填期限随时可做的；以后才到期的家务不出现在这里
+        const todayIds = new Set(hwTodayTasks().map(t => t.id));
+        const repeating = houseworkData.tasks.filter(t => todayIds.has(t.id) && hwIsRepeating(t) && !hwIsFinished(t));
+        const oneTimeAll = houseworkData.tasks.filter(t => todayIds.has(t.id) && !hwIsRepeating(t));
         const oneTime = oneTimeAll.filter(t => !hwIsFinished(t))
           .concat(oneTimeAll.filter(t => hwIsFinished(t))
             .sort((a, b) => hwParse(b.lastDoneAt || b.completedAt || 0) - hwParse(a.lastDoneAt || a.completedAt || 0)));
@@ -10728,6 +10862,24 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       AppHelper.closeModal(modalId);
     }
 
+    // 【美化警告弹窗】替代原生 alert：红色警示图标 + 单按钮，风格与应用卡片一致
+    function hwShowWarnDialog(message) {
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[70] flex items-center justify-center p-4';
+      overlay.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 animate-slide-up text-center">
+          <div class="w-14 h-14 mx-auto rounded-full bg-red-100 flex items-center justify-center mb-3">
+            <i class="fa fa-exclamation-triangle text-red-500 text-xl"></i>
+          </div>
+          <p class="text-gray-800 font-medium mb-5">${esc(message)}</p>
+          <button type="button" class="hw-warn-ok w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 active:scale-[0.98] text-white text-sm font-medium transition-all">知道了</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      overlay.querySelector('.hw-warn-ok').addEventListener('click', close);
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    }
+
     async function saveHousework(e) {
       e.preventDefault();
 
@@ -10782,6 +10934,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         payload.completedAt = null;
       }
 
+      // 【一天一次】同一个家务（同名）一天只能添加一次；编辑不受限，删除后可重新添加
+      if (!existing) {
+        const todayStr = hwLocalISO(new Date()).slice(0, 10);
+        const dup = houseworkData.tasks.find(t =>
+          t.title && t.title.trim() === titleValue &&
+          String(t.createdAt || '').slice(0, 10) === todayStr
+        );
+        if (dup) {
+          hwShowWarnDialog('家务存在，请勿重复添加');
+          return;
+        }
+      }
+
       if (existing) {
         const index = houseworkData.tasks.findIndex(t => t.id === id);
         houseworkData.tasks[index] = { ...existing, ...payload };
@@ -10813,12 +10978,16 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const repeating = hwIsRepeating(task);
 
       // 快照，便于保存失败时回滚
-      const snapshot = { lastDoneAt: task.lastDoneAt, completedAt: task.completedAt, dueDate: task.dueDate, status: task.status, doneCount: task.doneCount, memberId: task.memberId };
+      const snapshot = { lastDoneAt: task.lastDoneAt, completedAt: task.completedAt, dueDate: task.dueDate, status: task.status, doneCount: task.doneCount, memberId: task.memberId, lastDoneBy: task.lastDoneBy };
 
-      houseworkData.history.push({ taskId: task.id, title: task.title, at: doneAt, memberId: task.memberId || '' });
+      // 【负责人固定】完成时先把「当时的负责人」记下来（lastDoneBy）：
+      // 周期任务若有轮值，完成会立即把负责人切给下一位，行尾头像仍应显示这次做的人
+      const doneBy = task.memberId || '';
+      houseworkData.history.push({ taskId: task.id, title: task.title, at: doneAt, memberId: doneBy });
       if (houseworkData.history.length > 3000) houseworkData.history = houseworkData.history.slice(-3000);
 
       task.lastDoneAt = doneAt;
+      task.lastDoneBy = doneBy;
       task.doneCount = (task.doneCount || 0) + 1;
 
       if (repeating) {
