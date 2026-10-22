@@ -5970,32 +5970,48 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         </ul>
       </div>
 
-      <!-- ================= 今天 ================= -->
+      <!-- ================= 今天（小家灯光图） ================= -->
       <div id="housework-today-tab-content" class="tab-content active animate-fade-in">
         <style>
-          .hw-room { transition: background-color .3s ease, border-color .3s ease; }
+          .hw-tile { min-height: 76px; text-align: left; transition: background-color .3s ease, border-color .3s ease, box-shadow .3s ease, transform .2s ease; }
+          .hw-tile:active { transform: scale(.98); }
+          .hw-lit { background: linear-gradient(135deg, #fffbeb, #fde68a); border-color: #fcd34d; color: #92400e; box-shadow: 0 0 18px -4px rgba(251,191,36,.55); }
+          .hw-lit .hw-bulb { color: #f59e0b; text-shadow: 0 0 10px rgba(245,158,11,.85); }
+          .hw-lit .hw-tile-ico { color: #d97706; }
+          .hw-off { background: #ffffff; border-color: #e5e7eb; color: #6b7280; }
+          .hw-off .hw-bulb, .hw-off .hw-tile-ico { color: #6b7280; }
+          .hw-idle { background: #ffffff; border-color: #e5e7eb; color: #6b7280; }
+          .hw-idle .hw-bulb, .hw-idle .hw-tile-ico { color: #6b7280; }
+          .hw-picked { outline: 2px solid #10b981; outline-offset: 2px; }
           @keyframes hwPop { 0% { transform: scale(.5); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
           .hw-pop { animation: hwPop .35s ease-out; }
         </style>
         <div id="houseworkNotice" class="mb-4"></div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          <!-- 左：小家平面图 -->
-          <div class="lg:col-span-2">
+          <!-- 左：灯光图 + 任务列表 -->
+          <div class="lg:col-span-2 space-y-6">
             <div class="bg-white rounded-2xl shadow-card p-4 sm:p-6">
               <div class="flex items-center justify-between mb-4">
                 <div class="min-w-0">
-                  <h3 class="text-base font-semibold text-gray-800">小家平面图</h3>
+                  <h3 class="text-base font-semibold text-gray-800">小家灯光图</h3>
                   <p class="text-xs text-gray-500 mt-0.5" id="houseworkMapSummary">把家点亮，今天就算齐活</p>
                 </div>
                 <div class="flex items-center gap-3 flex-shrink-0">
-                  <div id="houseworkMapDots" class="hidden sm:flex items-center gap-1.5"></div>
                   <button id="houseworkManageBtn" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium flex items-center">
                     <i class="fa fa-list-ul mr-1 text-xs"></i>家务管理
                   </button>
                 </div>
               </div>
-              <div id="houseworkTodayList" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+              <div id="houseworkLightMap" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-card p-4 sm:p-6">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-semibold text-gray-800">今天的任务</h3>
+                <span id="houseworkFilterHint" class="text-xs"></span>
+              </div>
+              <div id="houseworkTaskList" class="space-y-5"></div>
             </div>
           </div>
 
@@ -6048,7 +6064,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           <div class="flex justify-between items-center mb-4">
               <h4 class="text-base font-semibold text-gray-800">完成趋势</h4>
               <div class="flex items-center space-x-1 flex-shrink-0">
-                <select id="houseworkTrendMember" class="px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-600 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"></select>
                 <button class="housework-period-btn px-3 py-1 rounded-md text-xs font-medium bg-emerald-600 text-white" data-period="7">7天</button>
                 <button class="housework-period-btn px-3 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600" data-period="30">30天</button>
               </div>
@@ -6058,13 +6073,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             </div>
         </div>
 
-        <!-- 付出报告 -->
+        <!-- 房间完成分布 -->
         <div class="bg-white rounded-2xl shadow-card p-6 mb-6">
           <div class="flex items-center justify-between mb-4">
-            <h4 class="text-base font-semibold text-gray-800">本月付出报告</h4>
+            <h4 class="text-base font-semibold text-gray-800">本月家务分布</h4>
             <span class="text-xs text-gray-400" id="houseworkReportRange">--</span>
           </div>
-          <div id="houseworkMemberReport" class="space-y-4"></div>
+          <div id="houseworkRoomReport" class="space-y-4"></div>
         </div>
       </div>
     </main>
@@ -6399,31 +6414,22 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           </div>
         </div>
 
-        <!-- 区域 + 负责人 -->
-        <div class="grid grid-cols-2 gap-4 mb-5">
-          <div>
-            <label class="block text-gray-700 text-sm font-medium mb-2" for="houseworkRoom">区域</label>
-            <input type="text" id="houseworkRoom" list="houseworkRoomOptions" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="例如：客厅">
-            <datalist id="houseworkRoomOptions"></datalist>
-          </div>
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <label class="block text-gray-700 text-sm font-medium" for="houseworkMember">谁来负责</label>
-              <button type="button" id="openMemberManager" class="text-xs text-emerald-700 hover:text-emerald-800 hover:underline">管理成员</button>
-            </div>
-            <select id="houseworkMember" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"></select>
-          </div>
+        <!-- 区域（固定五个房间，可不选=杂物角） -->
+        <div class="mb-5">
+          <label class="block text-gray-700 text-sm font-medium mb-2" for="houseworkRoom">区域</label>
+          <select id="houseworkRoom" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+            <option value="">不指定（进杂物角）</option>
+            <option value="客厅">客厅</option>
+            <option value="主卧">主卧</option>
+            <option value="次卧">次卧</option>
+            <option value="厨房">厨房</option>
+            <option value="卫生间">卫生间</option>
+          </select>
         </div>
 
         <!-- 周期 -->
         <div class="mb-5">
-          <div class="flex items-center justify-between mb-2">
-            <label class="block text-gray-700 text-sm font-medium">多久做一次</label>
-            <label class="flex items-center text-xs text-gray-500 cursor-pointer select-none">
-              <input type="checkbox" id="houseworkRotate" class="mr-1.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
-              轮流做
-            </label>
-          </div>
+          <label class="block text-gray-700 text-sm font-medium mb-2">多久做一次</label>
           <div id="houseworkRepeatPicker" class="grid grid-cols-5 gap-2 mb-3">
             <button type="button" class="housework-choice px-1 py-2 rounded-xl border text-xs font-medium transition-all duration-200" data-group="repeat" data-value="none">一次性</button>
             <button type="button" class="housework-choice px-1 py-2 rounded-xl border text-xs font-medium transition-all duration-200" data-group="repeat" data-value="daily">每天</button>
@@ -9624,13 +9630,14 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
   <!-- 家务管理脚本 -->
   <script>
     /* ============================================================
-       家务管理模块
+       家务管理模块（重构版）
        设计要点：
-       1. 周期优先 —— 家务是「重复发生」的，完成任务 = 推进到下一个周期，
-          而不是归档。一次建好，长期复用。
-       2. 时间视角 —— 主视图是「今天」，不是状态列表。用户只想知道现在该干嘛。
-       3. 家庭维度 —— 每项家务有负责人，支持轮值。
-       4. 新鲜度 —— 「距上次做已 N 天」比「逾期」更贴近真实感受。
+       1. 灯光图 —— 五个固定房间，家务做完房间就「亮黄灯」，没做完是灰色，
+          全屋状态一眼看清。
+       2. 周期优先 —— 完成任务 = 从原定到期日推进到下一周期（锚定不漂移）。
+       3. 可撤销 —— 误点完成再点一次即撤回，防止统计被刷。
+       4. 单人模式 —— 负责人固定为「我」，成员体系已移除（旧数据字段保留兼容）。
+       存储 key/字段与旧版完全兼容：tasks / members(遗留) / history / rooms(固定)。
        ============================================================ */
 
     const houseworkData = {
@@ -9648,16 +9655,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       shopping: { name: '购物', icon: 'fa-shopping-cart' },
       other: { name: '其他', icon: 'fa-ellipsis-h' }
     };
-    const HW_TYPE_KEYS = ['cleaning', 'cooking', 'laundry', 'shopping', 'other'];
 
-    // 成员配色轮转
-    const HW_MEMBER_COLORS = [
-      { bg: 'bg-blue-100', text: 'text-blue-700' },
-      { bg: 'bg-pink-100', text: 'text-pink-700' },
-      { bg: 'bg-amber-100', text: 'text-amber-700' },
-      { bg: 'bg-purple-100', text: 'text-purple-700' },
-      { bg: 'bg-cyan-100', text: 'text-cyan-700' }
+    // 固定户型：五个房间，不可增删（客厅占两格）
+    const HW_ROOMS = [
+      { name: '客厅', icon: 'fa-television', span: 2 },
+      { name: '主卧', icon: 'fa-bed', span: 1 },
+      { name: '次卧', icon: 'fa-bed', span: 1 },
+      { name: '厨房', icon: 'fa-cutlery', span: 1 },
+      { name: '卫生间', icon: 'fa-bath', span: 1 }
     ];
+    const HW_ROOM_NAMES = HW_ROOMS.map(r => r.name);
+    const HW_JUNK = '杂物角';
 
     // 完成时的激励文案（按类型）
     const HW_DONE_PHRASES = {
@@ -9668,7 +9676,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       other: ['搞定一项，轻松一点', '又完成了一件']
     };
 
-    // 常用家务快捷项（按用户家实际情况定制）
+    // 常用家务快捷项（区域限定五个房间；无房间的置为杂物角）
     const HW_QUICK_PICKS = [
       { title: '打扫客厅', type: 'cleaning', room: '客厅', repeat: { freq: 'interval', interval: 2 } },
       { title: '打扫主卧', type: 'cleaning', room: '主卧', repeat: { freq: 'interval', interval: 7 } },
@@ -9677,8 +9685,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       { title: '做饭', type: 'cooking', room: '厨房', repeat: { freq: 'daily' } },
       { title: '打扫厨房', type: 'cleaning', room: '厨房', repeat: { freq: 'interval', interval: 2 } },
       { title: '倒垃圾', type: 'other', room: '厨房', repeat: { freq: 'daily' } },
-      { title: '周末大扫除', type: 'cleaning', room: '其他', repeat: { freq: 'weekly', weekdays: [0, 6] } },
-      { title: '购物', type: 'shopping', room: '其他', repeat: { freq: 'interval', interval: 2 } },
+      { title: '周末大扫除', type: 'cleaning', room: '', repeat: { freq: 'weekly', weekdays: [0, 6] } },
+      { title: '购物', type: 'shopping', room: '', repeat: { freq: 'interval', interval: 2 } },
       { title: '洗衣服', type: 'laundry', room: '卫生间', repeat: { freq: 'interval', interval: 2 } }
     ];
 
@@ -9686,6 +9694,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     let houseworkChartsReady = false;
     let houseworkPeriod = 7;
     let houseworkEditingWeekdays = [];
+    let hwRoomFilter = '';      // 灯光图筛选中的房间，'' = 全部
+    let hwDoneCollapsed = false; // 「今天已完成」区是否折叠
+    let hwNoticeSignature = null;
+    let hwPrevLit = null;       // 上次渲染时点亮的房间集合（用于点亮动画）
 
     /* ---------- 时间工具 ---------- */
 
@@ -9822,6 +9834,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       return hwParse(task.dueDate);
     }
 
+    // 【锚点修复】完成/跳过时从「原定到期日」往后推进（而不是从现在），
+    // 长期固定的节奏（如每 2 天打扫）不会因偶尔拖期而漂移；逾期太久会循环追平。
+    function hwAdvanceDue(task, ref) {
+      const now = ref || new Date();
+      const base = hwGetDue(task) || now;
+      let next = hwNextDue(task, base);
+      let guard = 0;
+      while (next && next <= now && guard++ < 60) {
+        next = hwNextDue(task, next);
+      }
+      return next;
+    }
+
     /* ---------- 状态判定 ---------- */
 
     function hwIsDoneToday(task) {
@@ -9854,20 +9879,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       return { days, ratio, level, cycle };
     }
 
-    function hwMemberById(id) {
-      return houseworkData.members.find(m => m.id === id) || null;
+    // 任务归属分组：五个固定房间之一，否则「杂物角」
+    function hwRoomGroup(task) {
+      const r = typeof task.room === 'string' ? task.room.trim() : '';
+      return HW_ROOM_NAMES.includes(r) ? r : HW_JUNK;
     }
 
-    function hwMemberColor(member) {
-      if (!member) return HW_MEMBER_COLORS[0];
-      const idx = houseworkData.members.indexOf(member);
-      return HW_MEMBER_COLORS[(idx < 0 ? 0 : idx) % HW_MEMBER_COLORS.length];
-    }
-
-    function hwMemberBadge(member) {
-      if (!member) return '';
-      const c = hwMemberColor(member);
-      return `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${c.bg} ${c.text} text-xs font-medium flex-shrink-0" title="${esc(member.name)}">${esc((member.name || '?').slice(0, 1))}</span>`;
+    function hwRoomIcon(name) {
+      const r = HW_ROOMS.find(x => x.name === name);
+      return r ? r.icon : 'fa-cube';
     }
 
     /* ---------- 数据层 ---------- */
@@ -9883,31 +9903,15 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         t && typeof t === 'object' && typeof t.title === 'string'
       );
 
+      // 成员体系已移除，但字段原样保留，兼容旧云端数据
       houseworkData.members = Array.isArray(savedData.members) ? savedData.members.filter(m => m && typeof m === 'object') : [];
       houseworkData.history = Array.isArray(savedData.history) ? savedData.history.filter(h => h && typeof h === 'object') : [];
 
-      // 房间：存在数据里，可自由增删；首次使用时用默认户型
-      houseworkData.rooms = Array.isArray(savedData.rooms)
-        ? savedData.rooms
-            .filter(r => r && typeof r === 'object' && typeof r.name === 'string' && r.name.trim())
-            .map(r => ({ name: r.name.trim(), icon: r.icon || 'fa-cube', span: Math.min(3, Math.max(1, parseInt(r.span, 10) || 1)) }))
-        : [];
-      if (!houseworkData.rooms.length) houseworkData.rooms = HW_DEFAULT_ROOMS.map(r => ({ ...r }));
+      // 房间固定为默认户型，不再支持增删
+      houseworkData.rooms = HW_ROOMS.map(r => ({ ...r }));
 
-      // 旧数据迁移：in-progress 状态、自由文本 assignee、缺失字段
+      // 旧数据迁移：in-progress 状态、自由文本 assignee、缺失字段、旧房间名
       houseworkData.tasks = rawTasks.map(hwMigrateTask);
-      hwEnsureMembers();
-
-      // 【负责人固定】补记录：lastDoneBy 引入前完成的任务，从历史里找回完成时的负责人
-      // （周期任务完成后负责人会轮值切换，task.memberId 已不是当时做的人；历史条目在轮值前写入，可信）
-      houseworkData.tasks.forEach(t => {
-        if (t.lastDoneAt && !t.lastDoneBy) {
-          const h = houseworkData.history
-            .filter(x => x && x.taskId === t.id && x.at === t.lastDoneAt && typeof x.memberId === 'string' && x.memberId)
-            .pop();
-          if (h) t.lastDoneBy = h.memberId;
-        }
-      });
 
       AppHelper.sanitizeIds('houseworkData', { tasks: houseworkData.tasks, members: houseworkData.members });
     }
@@ -9918,7 +9922,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       if (t.status === 'in-progress') t.status = 'pending';
       if (t.status !== 'completed') t.status = t.status || 'pending';
 
-      // 旧字段 assignee（自由文本）→ 成员 id 由 hwEnsureMembers 统一处理
       if (!t.repeat || typeof t.repeat !== 'object') t.repeat = { freq: 'none' };
       if (typeof t.doneCount !== 'number') t.doneCount = t.status === 'completed' ? 1 : 0;
       if (!t.lastDoneAt && t.completedAt) t.lastDoneAt = t.completedAt;
@@ -9927,41 +9930,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
       if (typeof t.room !== 'string') t.room = '';
       if (t.room === '卧室') t.room = '主卧';
+      // 旧户型里的「其他」房 → 杂物角（room 置空即可，分组自动落角）
+      if (t.room === '其他') t.room = '';
       if (typeof t.memberId !== 'string') t.memberId = '';
       return t;
-    }
-
-    // 保证至少有一个成员，并把旧的 assignee 文本转成成员
-    function hwEnsureMembers() {
-      const legacyNames = [];
-      houseworkData.tasks.forEach(t => {
-        if (t.assignee && typeof t.assignee === 'string' && t.assignee.trim() && !t.memberId) {
-          const name = t.assignee.trim();
-          if (!legacyNames.includes(name)) legacyNames.push(name);
-        }
-      });
-
-      const usedColors = houseworkData.members.length;
-      legacyNames.forEach((name, i) => {
-        let member = houseworkData.members.find(m => m.name === name);
-        if (!member) {
-          member = { id: 'm' + Date.now().toString(36) + i, name };
-          houseworkData.members.push(member);
-        }
-        houseworkData.tasks.forEach(t => {
-          if (t.assignee && t.assignee.trim() === name && !t.memberId) t.memberId = member.id;
-        });
-      });
-
-      if (!houseworkData.members.length) {
-        // 首次使用：按用户家庭预置成员（我/老婆/父亲/母亲），可随时在「管理成员」里增删
-        [
-          { id: 'm_self', name: '我' },
-          { id: 'm_wife', name: '老婆' },
-          { id: 'm_father', name: '父亲' },
-          { id: 'm_mother', name: '母亲' }
-        ].forEach(m => houseworkData.members.push(m));
-      }
     }
 
     async function saveHouseworkData() {
@@ -9982,8 +9954,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     }
 
     function hwRenderAll() {
-      hwSyncMemberSelect();
-      hwSyncTrendMember();
       hwRenderToday();
       hwRenderStats();
       hwUpdateHeaderSummary();
@@ -10039,39 +10009,23 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       return houseworkData.history.filter(h => !h.taskId || alive.has(h.taskId));
     }
 
-    function hwCompletedOn(dateStr, memberId) {
-      return hwAliveHistory().filter(h =>
-        hwDateStr(h.at) === dateStr && (!memberId || h.memberId === memberId)
-      ).length;
+    function hwCompletedOn(dateStr) {
+      return hwAliveHistory().filter(h => hwDateStr(h.at) === dateStr).length;
     }
 
     function hwUpdateTrendChart() {
       if (!houseworkTrendChart) return;
-      const sel = document.getElementById('houseworkTrendMember');
-      const memberId = (sel && sel.value !== 'all') ? sel.value : '';
-      const member = memberId ? hwMemberById(memberId) : null;
       const labels = [];
       const data = [];
       const now = new Date();
       for (let i = houseworkPeriod - 1; i >= 0; i--) {
         const d = new Date(now.getTime() - i * 86400000);
         labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
-        data.push(hwCompletedOn(hwDateStr(d), memberId));
+        data.push(hwCompletedOn(hwDateStr(d)));
       }
       houseworkTrendChart.data.labels = labels;
       houseworkTrendChart.data.datasets[0].data = data;
-      houseworkTrendChart.data.datasets[0].label = member ? `${member.name}的完成数` : '完成家务数';
       houseworkTrendChart.update();
-    }
-
-    // 趋势图成员筛选（与成员管理同一份成员列表）
-    function hwSyncTrendMember() {
-      const sel = document.getElementById('houseworkTrendMember');
-      if (!sel) return;
-      const current = sel.value;
-      sel.innerHTML = '<option value="all">全部成员</option>' +
-        houseworkData.members.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
-      sel.value = houseworkData.members.some(m => m.id === current) ? current : 'all';
     }
 
     /* ---------- 事件绑定 ---------- */
@@ -10084,7 +10038,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         });
       });
 
-      // 加一项（添加家务）
+      // 家务管理弹窗
       document.getElementById('houseworkManageBtn')?.addEventListener('click', hwOpenManageDialog);
 
       // 表单
@@ -10101,21 +10055,35 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           hwToggleWeekday(this.dataset.day);
         });
       });
-      document.getElementById('houseworkRotate')?.addEventListener('change', hwSyncRotateHint);
 
       // 快捷项
       hwRenderQuickPicks();
 
-      // 家庭成员管理
-      document.getElementById('openMemberManager')?.addEventListener('click', hwOpenMemberDialog);
+      // 灯光图：点房间筛选
+      const map = document.getElementById('houseworkLightMap');
+      if (map && !map.dataset.hwBound) {
+        map.dataset.hwBound = '1';
+        map.addEventListener('click', function(e) {
+          const tile = e.target.closest('[data-hw-tile]');
+          if (!tile) return;
+          const name = tile.dataset.hwTile;
+          hwRoomFilter = hwRoomFilter === name ? '' : name;
+          hwRenderToday();
+        });
+      }
 
+      // 任务列表点击（事件委托，避免每次渲染重复绑定）
+      const list = document.getElementById('houseworkTaskList');
+      if (list && !list.dataset.hwBound) {
+        list.dataset.hwBound = '1';
+        list.addEventListener('click', hwHandleListClick);
+      }
 
-      // 今天列表点击（事件委托，避免每次渲染重复绑定）
-      ['houseworkTodayList'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && !el.dataset.hwBound) {
-          el.dataset.hwBound = '1';
-          el.addEventListener('click', hwHandleListClick);
+      // 筛选复位
+      document.getElementById('houseworkFilterHint')?.addEventListener('click', function(e) {
+        if (e.target.closest('[data-hw-clearfilter]')) {
+          hwRoomFilter = '';
+          hwRenderToday();
         }
       });
 
@@ -10133,8 +10101,17 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         });
       });
 
-      // 趋势图成员筛选
-      document.getElementById('houseworkTrendMember')?.addEventListener('change', hwUpdateTrendChart);
+      // Esc 关闭最上层的家务弹窗
+      if (!document.body.dataset.hwEscBound) {
+        document.body.dataset.hwEscBound = '1';
+        document.addEventListener('keydown', function(e) {
+          if (e.key !== 'Escape') return;
+          const dyn = document.querySelectorAll('.hw-overlay');
+          if (dyn.length) { dyn[dyn.length - 1].remove(); return; }
+          const modal = document.getElementById('addHouseworkModal');
+          if (modal && !modal.classList.contains('hidden')) closeHouseworkModal('addHouseworkModal');
+        });
+      }
     }
 
     function hwRenderQuickPicks() {
@@ -10152,16 +10129,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
     }
 
-    // 渲染「区域」候选（房间列表 + 已用过的区域去重）
-    function hwRenderRoomOptions() {
-      const list = document.getElementById('houseworkRoomOptions');
-      if (!list) return;
-      const rooms = [...new Set([...houseworkData.rooms.map(r => r.name), ...houseworkData.tasks.map(t => t.room).filter(Boolean)])];
-      // 【快捷候选】区域输入候选追加「其他」，仅作为表单候选值，不写入房间列表
-      if (!rooms.includes('其他')) rooms.push('其他');
-      list.innerHTML = rooms.map(r => `<option value="${esc(r)}"></option>`).join('');
-    }
-
     function switchHouseworkTab(tab) {
       AppHelper.switchTab(tab, '#houseworkTabNav button', 'housework', 'active', 'border-emerald-600', 'text-emerald-700');
       if (tab === 'today') hwRenderToday();
@@ -10172,16 +10139,29 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     }
 
     function hwHandleListClick(e) {
+      const tog = e.target.closest('[data-hw-toggle]');
+      if (tog) {
+        if (tog.dataset.hwToggle === 'done') {
+          hwDoneCollapsed = !hwDoneCollapsed;
+          hwRenderToday();
+        }
+        return;
+      }
       const btn = e.target.closest('[data-hw-action]');
       if (!btn) return;
       e.preventDefault();
       e.stopPropagation();
       const id = btn.dataset.hwId;
       const action = btn.dataset.hwAction;
-      if (action === 'complete') completeHousework(id);
+      if (action === 'complete') {
+        const task = houseworkData.tasks.find(t => t.id === id);
+        // 今天已完成 → 再点 = 撤销（防误点，也防重复完成刷数据）
+        if (task && hwIsDoneToday(task)) undoHouseworkComplete(id);
+        else completeHousework(id);
+      }
       else if (action === 'snooze') snoozeHousework(id);
       else if (action === 'skip') skipHousework(id);
-      else if (action === 'edit') openHouseworkModal(id, btn.dataset.hwPreset || null);
+      else if (action === 'edit') openHouseworkModal(id);
       else if (action === 'delete') deleteHousework(id);
     }
 
@@ -10214,19 +10194,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
     }
 
-    // 小家平面图：默认户型（用户家：主卧/次卧/客厅/卫生间/厨房）。
-    // 房间列表存在 houseworkData.rooms 里，可在「房间」里自由增删，这里只是首次使用的默认值。
-    const HW_DEFAULT_ROOMS = [
-      { name: '客厅', icon: 'fa-television', span: 2 },
-      { name: '主卧', icon: 'fa-bed', span: 1 },
-      { name: '次卧', icon: 'fa-bed', span: 1 },
-      { name: '厨房', icon: 'fa-cutlery', span: 1 },
-      { name: '卫生间', icon: 'fa-bath', span: 1 }
-    ];
-
     // 拖期提醒横幅：进模块就能看到，不用自己翻。关掉后同一批提醒不再弹，有新拖期才出现
-    let hwNoticeSignature = null;
-
     function hwRenderNotice(todayList) {
       const box = document.getElementById('houseworkNotice');
       if (!box) return;
@@ -10268,8 +10236,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       box.querySelector('[data-hw-notice-dismiss]')?.addEventListener('click', () => { box.innerHTML = ''; });
     }
 
+    // 到期时间的短文案：今天 / 明天 / 周X / M/D
+    function hwDueShort(due) {
+      if (!due) return '';
+      const days = hwDaysBetween(due, new Date());
+      if (days === 0) return '今天';
+      if (days === 1) return '明天';
+      if (days < 7) return '周' + '日一二三四五六'[due.getDay()];
+      return `${due.getMonth() + 1}/${due.getDate()}`;
+    }
+
     function hwRenderToday() {
-      const listEl = document.getElementById('houseworkTodayList');
+      const listEl = document.getElementById('houseworkTaskList');
       const dateEl = document.getElementById('houseworkTodayDate');
       if (!listEl) return;
 
@@ -10297,153 +10275,178 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       if (doneEl) doneEl.textContent = doneCount;
       if (totalEl) totalEl.textContent = `/ ${total}`;
 
-      // 按房间分组（平面图顺序；未填/已删房间的归入「其他」）
-      const groups = houseworkData.rooms.map(r => ({ ...r, tasks: [] }));
-      const otherTasks = [];
-      tasks.forEach(t => {
-        const g = groups.find(g => g.name === t.room);
-        if (g) g.tasks.push(t); else otherTasks.push(t);
-      });
-      if (otherTasks.length) groups.push({ name: '其他', icon: 'fa-ellipsis-h', span: 3, tasks: otherTasks });
-
-      // 点亮统计：有任务的房间 = 活跃；全部完成 = 点亮
-      const active = groups.filter(g => g.tasks.length);
-      const lit = active.filter(g => g.tasks.every(hwIsDoneToday)).length;
-      const dotsEl = document.getElementById('houseworkMapDots');
-      if (dotsEl) {
-        dotsEl.innerHTML = active.map(g => {
-          const done = g.tasks.every(hwIsDoneToday);
-          const overdue = g.tasks.some(t => hwIsOverdue(t));
-          const dot = done ? 'bg-green-500' : overdue ? 'bg-red-500' : 'bg-emerald-400';
-          return `<span class="w-2.5 h-2.5 rounded-full ${dot}"></span>`;
-        }).join('');
-      }
-      const summaryEl = document.getElementById('houseworkMapSummary');
-      if (summaryEl) {
-        if (!active.length) summaryEl.textContent = '今天家里没事，轻松';
-        else if (lit === active.length) summaryEl.textContent = '今日家务已做完，干得漂亮';
-        else summaryEl.textContent = `${lit} / ${active.length} 间已点亮`;
-      }
-
-      const hint = document.getElementById('houseworkTodayHint');
-      if (hint) {
-        if (total === 0) hint.textContent = '今天还没有家务安排';
-        else if (doneCount === total) hint.textContent = '今天的家务全部完成了，好好休息';
-        else hint.textContent = `再做 ${total - doneCount} 项，家就齐活了`;
-      }
-
-      listEl.innerHTML = groups.map(hwRoomCard).join('');
+      // 灯光图 + 任务分区
+      hwRenderLightMap(tasks);
+      hwRenderTaskSections(listEl, tasks, total, doneCount);
     }
 
-    // 到期时间的短文案：今天 / 明天 / 周X / M/D
-    function hwDueShort(due) {
-      if (!due) return '';
-      const days = hwDaysBetween(due, new Date());
-      if (days === 0) return '今天';
-      if (days === 1) return '明天';
-      if (days < 7) return '周' + '日一二三四五六'[due.getDay()];
-      return `${due.getMonth() + 1}/${due.getDate()}`;
-    }
+    // 小家灯光图：五个固定房间 + 杂物角（只有落了任务才出现）
+    function hwRenderLightMap(tasks) {
+      const box = document.getElementById('houseworkLightMap');
+      if (!box) return;
 
-    // 平面图房间卡：今天没事=素净；全做完=点亮；有拖期=红色；否则待办
-    function hwRoomCard(group) {
-      const { name, icon, tasks } = group;
-      const spanCls = group.span === 3 ? 'sm:col-span-2 xl:col-span-3' : group.span === 2 ? 'sm:col-span-2' : '';
-      const done = tasks.length > 0 && tasks.every(hwIsDoneToday);
-      const overdue = tasks.some(t => hwIsOverdue(t));
-
-      let cls, headCls, note, body;
-      if (!tasks.length) {
-        cls = 'border-gray-100 bg-gray-50/40';
-        headCls = 'text-gray-400';
-        note = '<span class="text-xs text-gray-300">暂无家务</span>';
-        // 今天没事的房间：预告最近要到期的家务
-        const todayIds = new Set(hwTodayTasks().map(t => t.id));
-        const upcoming = houseworkData.tasks
-          .filter(t => t.room === name && !hwIsFinished(t) && !todayIds.has(t.id))
+      const todayIds = new Set(tasks.map(t => t.id));
+      const groups = HW_ROOMS.map(r => ({
+        name: r.name, icon: r.icon, span: r.span,
+        tasks: tasks.filter(t => hwRoomGroup(t) === r.name),
+        upcoming: houseworkData.tasks
+          .filter(t => hwRoomGroup(t) === r.name && !hwIsFinished(t) && !todayIds.has(t.id))
           .map(t => ({ t, due: hwGetDue(t) }))
           .filter(x => x.due)
           .sort((a, b) => a.due - b.due)
-          .slice(0, 2);
-        body = upcoming.length ? `<div class="space-y-1 pt-0.5">${upcoming.map(({ t, due }) => `
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-gray-400 truncate">${esc(t.title)}</span>
-            <span class="text-gray-300 flex-shrink-0 ml-2">${hwDueShort(due)}</span>
-          </div>`).join('')}</div>` : '';
-      } else if (done) {
-        cls = 'border-green-200 bg-green-50/60';
-        headCls = 'text-green-700';
-        note = '<span class="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center hw-pop"><i class="fa fa-check text-white text-xs"></i></span>';
-        body = `<div class="space-y-1.5">${tasks.map(hwMapTaskRow).join('')}</div>`;
-      } else if (overdue) {
-        cls = 'border-red-200 bg-red-50/50';
-        headCls = 'text-red-600';
-        note = '<span class="text-xs text-red-500 font-medium">该做了</span>';
-        body = `<div class="space-y-1.5">${tasks.map(hwMapTaskRow).join('')}</div>`;
-      } else {
-        cls = 'border-emerald-200 bg-emerald-50/40';
-        headCls = 'text-emerald-700';
-        note = `<span class="text-xs text-gray-400">${tasks.filter(hwIsDoneToday).length}/${tasks.length}</span>`;
-        body = `<div class="space-y-1.5">${tasks.map(hwMapTaskRow).join('')}</div>`;
+          .slice(0, 2)
+      }));
+      const junkTasks = tasks.filter(t => hwRoomGroup(t) === HW_JUNK);
+      const junkUpcoming = groups.length ? houseworkData.tasks
+        .filter(t => hwRoomGroup(t) === HW_JUNK && !hwIsFinished(t) && !todayIds.has(t.id))
+        .map(t => ({ t, due: hwGetDue(t) }))
+        .filter(x => x.due)
+        .sort((a, b) => a.due - b.due)
+        .slice(0, 2) : [];
+      if (junkTasks.length || junkUpcoming.length) {
+        groups.push({ name: HW_JUNK, icon: 'fa-cube', span: 1, tasks: junkTasks, upcoming: junkUpcoming });
       }
 
-      return `
-        <div class="hw-room rounded-xl border p-3 ${cls} ${spanCls}">
-          <div class="flex items-center justify-between mb-2 px-0.5">
-            <div class="flex items-center gap-2 min-w-0">
-              <i class="fa ${icon} text-sm ${headCls}"></i>
-              <span class="text-sm font-medium ${headCls} truncate">${esc(name)}</span>
+      // 点亮状态（含筛选态 + 新点亮动画）
+      const litSet = new Set();
+      groups.forEach(g => { if (g.tasks.length && g.tasks.every(hwIsDoneToday)) litSet.add(g.name); });
+
+      box.innerHTML = groups.map(g => {
+        const hasTasks = g.tasks.length > 0;
+        const done = hasTasks && g.tasks.every(hwIsDoneToday);
+        const stateCls = !hasTasks ? 'hw-idle' : done ? 'hw-lit' : 'hw-off';
+        const spanCls = g.span === 2 ? ' col-span-2' : '';
+        const picked = hwRoomFilter === g.name ? ' hw-picked' : '';
+        // 这次渲染才点亮的房间，闪一下
+        const popping = done && hwPrevLit && !hwPrevLit.has(g.name) ? ' hw-pop' : '';
+
+        let sub;
+        if (hasTasks) sub = done ? '已点亮' : `${g.tasks.filter(hwIsDoneToday).length}/${g.tasks.length} 完成`;
+        else if (g.upcoming.length) sub = `下次：${esc(g.upcoming[0].t.title)} ${hwDueShort(g.upcoming[0].due)}`;
+        else sub = '暂无家务';
+
+        return `
+          <button type="button" data-hw-tile="${esc(g.name)}" class="hw-tile rounded-xl border p-3 transition-all ${stateCls}${spanCls}${picked}${popping}" title="点击只看这个房间">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="flex items-center gap-1.5 min-w-0">
+                <i class="fa ${g.icon} hw-tile-ico text-sm"></i>
+                <span class="text-sm font-medium truncate">${esc(g.name)}</span>
+              </span>
+              <i class="fa fa-lightbulb-o hw-bulb text-base"></i>
             </div>
-            ${note}
-          </div>
-          ${body}
-        </div>`;
+            <p class="text-xs opacity-80 truncate">${sub}</p>
+          </button>`;
+      }).join('');
+
+      hwPrevLit = litSet;
+
+      // 点亮汇总语
+      const summaryEl = document.getElementById('houseworkMapSummary');
+      if (summaryEl) {
+        const roomCount = groups.filter(g => g.name !== HW_JUNK).length;
+        const active = groups.filter(g => g.tasks.length);
+        if (!active.length) summaryEl.textContent = '今天家里没事，轻松';
+        else if (litSet.size >= roomCount) summaryEl.textContent = '今日家务已做完，全屋点亮，干得漂亮';
+        else summaryEl.textContent = `${roomCount} 间中亮了 ${[...litSet].filter(n => n !== HW_JUNK).length} 间，把家点亮，今天就算齐活`;
+      }
     }
 
-    // 平面图里的任务行：紧凑版（勾选 + 标题 + 徽标 + 成员 + 推迟/跳过）
-    function hwMapTaskRow(task) {
-      const done = hwIsDoneToday(task);
-      const overdue = hwIsOverdue(task);
-      const member = hwMemberById(task.memberId);
-      // 【完成人记录】做完的行尾头像显示实际完成的人（没记录时退回负责人，兼容旧数据）
-      const doer = hwMemberById(task.lastDoneBy || task.memberId);
+    // 任务分区列表：待办（拖期在前） + 今天已完成（可折叠），受房间筛选影响
+    function hwRenderTaskSections(box, tasks, total, doneCount) {
+      const hint = document.getElementById('houseworkFilterHint');
+      if (hint) {
+        hint.innerHTML = hwRoomFilter
+          ? `<button type="button" data-hw-clearfilter class="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 hover:bg-emerald-100 transition-colors">
+               <i class="fa ${hwRoomIcon(hwRoomFilter)} mr-1"></i>只看${esc(hwRoomFilter)} ✕
+             </button>`
+          : '';
+      }
+
+      const filtered = hwRoomFilter ? tasks.filter(t => hwRoomGroup(t) === hwRoomFilter) : tasks;
+      const undone = filtered.filter(t => !hwIsDoneToday(t));
+      const done = filtered.filter(hwIsDoneToday);
+      const overdue = undone.filter(hwIsOverdue);
+      const normal = undone.filter(t => !hwIsOverdue(t));
+
+      if (!total) {
+        box.innerHTML = `<p class="text-sm text-gray-400 text-center py-8">今天还没有家务安排，去「家务管理」里添几项吧</p>`;
+        return;
+      }
+      if (!filtered.length) {
+        box.innerHTML = `<p class="text-sm text-gray-400 text-center py-8">「${esc(hwRoomFilter)}」今天没有任务</p>`;
+        return;
+      }
+
+      const section = (title, rows, headCls, icon) => `
+        <div>
+          <p class="text-xs font-medium ${headCls} mb-2 flex items-center gap-1.5"><i class="fa ${icon}"></i>${title} · ${rows.length}</p>
+          <div class="space-y-2">${rows.map(t => hwTaskRow(t, false)).join('')}</div>
+        </div>`;
+
+      let html = '';
+      if (overdue.length) html += section('该做了', overdue, 'text-red-500', 'fa-bell-o');
+      if (normal.length) html += section('今天要做', normal, 'text-gray-400', 'fa-clock-o');
+      if (done.length) {
+        html += `
+          <div>
+            <button type="button" data-hw-toggle="done" class="text-xs font-medium text-emerald-600 mb-2 flex items-center gap-1.5 hover:text-emerald-700 transition-colors">
+              <i class="fa fa-${hwDoneCollapsed ? 'caret-right' : 'caret-down'}"></i>今天已完成 · ${done.length}${hwDoneCollapsed ? '（点击展开）' : ''}
+            </button>
+            ${hwDoneCollapsed ? '' : `<div class="space-y-2">${done.map(t => hwTaskRow(t, true)).join('')}</div>`}
+          </div>`;
+      }
+      if (!html) html = `<p class="text-sm text-gray-400 text-center py-8">都完成了，好好休息</p>`;
+      box.innerHTML = html;
+    }
+
+    // 任务行：勾选（≥40px 命中区）+ 标题 + 徽标 + 操作
+    function hwTaskRow(task, done) {
+      const overdue = !done && hwIsOverdue(task);
+      const group = hwRoomGroup(task);
+      const repeating = hwIsRepeating(task);
 
       let flag = '';
-      if (!done && overdue) {
+      if (done) {
+        flag = `<span class="text-xs text-gray-400 flex-shrink-0">${hwHumanAgo(task.lastDoneAt || task.completedAt)}完成</span>`;
+      } else if (overdue) {
         flag = '<span class="px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-medium flex-shrink-0">该做了</span>';
-      } else if (!done && task.priority === 'high') {
+      } else if (task.priority === 'high') {
         flag = '<span class="px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-medium flex-shrink-0">比较急</span>';
       }
 
+      const roomTag = !done ? `<span class="px-1.5 py-0.5 rounded-full bg-gray-50 border border-gray-100 text-gray-400 text-xs flex-shrink-0"><i class="fa ${hwRoomIcon(group)} mr-1"></i>${esc(group)}</span>` : '';
+      const repeatTag = !done && repeating ? `<span class="text-xs text-gray-400 flex-shrink-0 hidden sm:inline">${esc(hwRepeatLabel(task.repeat))}</span>` : '';
+
       const titleCls = done ? 'text-gray-400 line-through' : 'text-gray-800';
-      const checkCls = done
-        ? 'bg-green-600 border-green-600 text-white hw-pop'
+      const circleCls = done
+        ? 'bg-amber-500 border-amber-500 text-white'
         : 'border-gray-300 text-transparent hover:border-emerald-500 hover:bg-emerald-50';
-      const sub = done
-        ? `<span class="text-xs text-gray-400 flex-shrink-0">${hwHumanAgo(task.lastDoneAt || task.completedAt)}完成</span>`
-        : '';
+
+      // 操作钮：推迟（全部）、跳过（仅周期任务——一次性「跳过」无意义已移除）、编辑
+      const actions = done ? '' : `
+        <button type="button" class="w-8 h-8 rounded-lg text-gray-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors" data-hw-action="snooze" data-hw-id="${esc(task.id)}" title="推迟到明天">
+          <i class="fa fa-clock-o text-xs"></i>
+        </button>
+        ${repeating ? `<button type="button" class="w-8 h-8 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors" data-hw-action="skip" data-hw-id="${esc(task.id)}" title="这次跳过">
+          <i class="fa fa-step-forward text-xs"></i>
+        </button>` : ''}
+        <button type="button" class="w-8 h-8 rounded-lg text-gray-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors" data-hw-action="edit" data-hw-id="${esc(task.id)}" title="编辑">
+          <i class="fa fa-pencil text-xs"></i>
+        </button>`;
 
       return `
-        <div class="flex items-center gap-2 p-1.5 rounded-lg bg-white/70 border border-white">
-          <button type="button" class="hw-check flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${checkCls}"
-                  data-hw-action="complete" data-hw-id="${esc(task.id)}" title="${done ? '今天已完成' : '标记完成'}">
-            <i class="fa fa-check" style="font-size:10px;"></i>
+        <div class="flex items-center gap-1 p-1.5 pl-0.5 rounded-xl bg-gray-50/70 border border-gray-50 hover:bg-white hover:shadow-sm transition-all">
+          <button type="button" class="w-10 h-10 flex items-center justify-center flex-shrink-0"
+                  data-hw-action="complete" data-hw-id="${esc(task.id)}" title="${done ? '点错了？再点一次撤销' : '标记完成'}">
+            <span class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${circleCls}">
+              <i class="fa fa-check" style="font-size:10px;"></i>
+            </span>
           </button>
-          <div class="flex-1 min-w-0 flex items-center gap-1.5">
-            <p class="text-sm truncate ${titleCls}">${esc(task.title)}</p>
-            ${flag}${sub}
+          <div class="flex-1 min-w-0 flex items-center gap-2">
+            <p class="text-sm truncate font-medium ${titleCls}">${esc(task.title)}</p>
+            ${roomTag}${repeatTag}${flag}
           </div>
-          <div class="flex items-center gap-0.5 flex-shrink-0">
-            ${hwMemberBadge(done ? doer : member)}
-            ${done ? '' : `
-              <button type="button" class="w-6 h-6 rounded-lg text-gray-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors" data-hw-action="snooze" data-hw-id="${esc(task.id)}" title="推迟到明天">
-                <i class="fa fa-clock-o text-xs"></i>
-              </button>
-              <button type="button" class="w-6 h-6 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors" data-hw-action="skip" data-hw-id="${esc(task.id)}" title="这次跳过">
-                <i class="fa fa-step-forward text-xs"></i>
-              </button>
-            `}
-          </div>
+          <div class="flex items-center flex-shrink-0">${actions}</div>
         </div>`;
     }
 
@@ -10466,32 +10469,18 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const range = document.getElementById('houseworkReportRange');
       if (range) range.textContent = `${now.getFullYear()}年${now.getMonth() + 1}月`;
 
-      hwRenderMemberReport(monthPrefix);
+      hwRenderRoomReport(monthPrefix);
       hwUpdateCharts();
     }
 
-    function hwRenderMemberReport(monthPrefix) {
-      const box = document.getElementById('houseworkMemberReport');
+    // 本月家务分布：按房间统计完成情况（成员体系已移除）
+    function hwRenderRoomReport(monthPrefix) {
+      const box = document.getElementById('houseworkRoomReport');
       if (!box) return;
 
       const monthLogs = hwAliveHistory().filter(h => hwDateStr(h.at).startsWith(monthPrefix));
-      const counts = {};
-      houseworkData.members.forEach(m => { counts[m.id] = 0; });
-      let unassigned = 0;
 
-      monthLogs.forEach(h => {
-        if (h.memberId && counts[h.memberId] !== undefined) counts[h.memberId]++;
-        else unassigned++;
-      });
-
-      // 全家人都列出来（包括 0 次的），谁在出力、谁在偷懒一眼看清
-      const rows = houseworkData.members
-        .map(m => ({ member: m, count: counts[m.id] || 0 }))
-        .sort((a, b) => b.count - a.count);
-
-      const total = monthLogs.length;
-
-      if (!total) {
+      if (!monthLogs.length) {
         box.innerHTML = `
           <div class="text-center py-8">
             <i class="fa fa-bar-chart text-4xl text-gray-200 mb-2"></i>
@@ -10500,26 +10489,36 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return;
       }
 
-      const maxCount = Math.max(1, rows.length ? rows[0].count : 1);
+      const roomOf = {};
+      houseworkData.tasks.forEach(t => { roomOf[t.id] = hwRoomGroup(t); });
+      const counts = {};
+      monthLogs.forEach(h => {
+        const g = roomOf[h.taskId] || HW_JUNK;
+        counts[g] = (counts[g] || 0) + 1;
+      });
 
-      box.innerHTML = rows.map(({ member, count }) => {
-        const c = hwMemberColor(member);
+      const rows = [...HW_ROOMS.map(r => r.name), HW_JUNK]
+        .filter(name => name !== HW_JUNK || counts[name])
+        .map(name => ({ name, icon: hwRoomIcon(name), count: counts[name] || 0 }));
+
+      const total = monthLogs.length;
+      const maxCount = Math.max(1, ...rows.map(r => r.count));
+
+      box.innerHTML = rows.map(({ name, icon, count }) => {
         const pct = Math.round((count / total) * 100);
         const barW = count ? Math.max(4, Math.round((count / maxCount) * 100)) : 0;
         return `
           <div>
             <div class="flex items-center gap-3 mb-1.5">
-              <span class="w-8 h-8 rounded-full ${c.bg} ${c.text} flex items-center justify-center text-sm font-medium flex-shrink-0">${esc(member.name.slice(0, 1))}</span>
-              <span class="font-medium text-gray-800 flex-1 truncate">${esc(member.name)}</span>
+              <span class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0"><i class="fa ${icon} text-sm"></i></span>
+              <span class="font-medium text-gray-800 flex-1 truncate">${esc(name)}</span>
               <span class="text-sm text-gray-500 flex-shrink-0">${count} 次 · ${pct}%</span>
             </div>
             <div class="w-full h-2 rounded-full bg-gray-100 overflow-hidden ml-11" style="max-width:calc(100% - 2.75rem)">
               <div class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width:${barW}%"></div>
             </div>
           </div>`;
-      }).join('') + (unassigned > 0 ? `
-        <p class="text-xs text-gray-400 pt-2 border-t border-gray-50">另有 ${unassigned} 次未指定负责人</p>
-      ` : '');
+      }).join('');
     }
 
     /* ---------- 家务管理弹窗 ---------- */
@@ -10527,21 +10526,20 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     // 管理全部家务：分「周期性」「一次性」两组，可编辑/删除/新增
     function hwOpenManageDialog() {
       const overlay = document.createElement('div');
-      overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[60] flex items-center justify-center p-4';
+      overlay.className = 'hw-overlay fixed inset-0 bg-black bg-opacity-40 z-[60] flex items-center justify-center p-4';
       document.body.appendChild(overlay);
 
       const rowHtml = t => {
         const meta = HW_TYPE_META[t.type || 'other'] || HW_TYPE_META.other;
         const finished = hwIsFinished(t);
         const doneToday = hwIsDoneToday(t);
-        // 【完成人记录】已做的行尾头像显示实际完成的人；未做的显示负责人
-        const member = (doneToday || finished) ? hwMemberById(t.lastDoneBy || t.memberId) : hwMemberById(t.memberId);
         const lastDone = t.lastDoneAt || t.completedAt;
         const due = hwGetDue(t);
+        const group = hwRoomGroup(t);
 
         let sub;
         if (hwIsRepeating(t)) {
-          sub = esc(hwRepeatLabel(t.repeat)) + (lastDone ? ` · 上次 ${hwHumanAgo(lastDone)}` : ' · 还没做过');
+          sub = `<i class="fa ${hwRoomIcon(group)} mr-1"></i>${esc(group)} · ${esc(hwRepeatLabel(t.repeat))}` + (lastDone ? ` · 上次 ${hwHumanAgo(lastDone)}` : ' · 还没做过');
         } else if (finished) {
           sub = lastDone ? `${hwHumanAgo(lastDone)}完成` : '已完成';
         } else {
@@ -10564,7 +10562,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
               </div>
               <p class="text-xs text-gray-400 mt-0.5 truncate">${sub}</p>
             </div>
-            ${hwMemberBadge(member)}
+            <button type="button" class="w-7 h-7 rounded-lg text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors" data-hw-manage-edit="${esc(t.id)}" title="编辑">
+              <i class="fa fa-pencil text-xs"></i>
+            </button>
             <button type="button" class="w-7 h-7 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" data-hw-manage-del="${esc(t.id)}" title="删除">
               <i class="fa fa-trash-o text-xs"></i>
             </button>
@@ -10572,7 +10572,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       };
 
       const paint = () => {
-        // 【用户要求】管理弹窗只显示「今日」的家务，与今天页平面图同一口径（hwTodayTasks）：
+        // 管理弹窗只显示「今日」的家务，与今天页同一口径（hwTodayTasks）：
         // 今天到期的、今天已做的、以及没填期限随时可做的；以后才到期的家务不出现在这里
         const todayIds = new Set(hwTodayTasks().map(t => t.id));
         const repeating = houseworkData.tasks.filter(t => todayIds.has(t.id) && hwIsRepeating(t) && !hwIsFinished(t));
@@ -10613,6 +10613,13 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       overlay.addEventListener('click', ev => {
         if (ev.target === overlay) { overlay.remove(); return; }
+        const editBtn = ev.target.closest('[data-hw-manage-edit]');
+        if (editBtn) {
+          const id = editBtn.dataset.hwManageEdit;
+          overlay.remove();
+          openHouseworkModal(id);
+          return;
+        }
         const delBtn = ev.target.closest('[data-hw-manage-del]');
         if (delBtn) {
           deleteHousework(delBtn.dataset.hwManageDel).then(paint);
@@ -10718,11 +10725,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         dueDateLabel.textContent = freq === 'none' ? '什么时候要完成' : '第一次什么时候做';
       }
 
-      const rotate = document.getElementById('houseworkRotate');
-      const rotateLabel = rotate?.closest('label');
-      if (rotateLabel) rotateLabel.style.display = freq === 'none' ? 'none' : 'flex';
-      if (freq === 'none' && rotate) rotate.checked = false;
-
       hwRefreshDueDatePreview();
     }
 
@@ -10745,18 +10747,11 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       });
     }
 
-    function hwSyncRotateHint() {
-      const rotate = document.getElementById('houseworkRotate');
-      const label = document.querySelector('label[for="houseworkMember"]');
-      if (!label) return;
-      label.textContent = (rotate && rotate.checked) ? '从谁开始' : '谁来负责';
-    }
-
     function hwApplyPreset(preset) {
       const titleEl = document.getElementById('houseworkTitle');
       if (titleEl) titleEl.value = preset.title;
       const roomEl = document.getElementById('houseworkRoom');
-      if (roomEl && preset.room) roomEl.value = preset.room;
+      if (roomEl) roomEl.value = HW_ROOM_NAMES.includes(preset.room) ? preset.room : '';
 
       hwSelectChoice('type', preset.type || 'cleaning');
 
@@ -10781,16 +10776,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       dueInput.classList.remove('bg-gray-50', 'text-gray-500');
     }
 
-    function hwSyncMemberSelect() {
-      const sel = document.getElementById('houseworkMember');
-      if (!sel) return;
-      const current = sel.value;
-      sel.innerHTML = houseworkData.members
-        .map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
-      if (current && houseworkData.members.some(m => m.id === current)) sel.value = current;
-    }
-
-    function openHouseworkModal(taskId = null, presetRepeat = null) {
+    function openHouseworkModal(taskId = null) {
       const modal = document.getElementById('addHouseworkModal');
       const title = document.getElementById('houseworkModalTitle');
       const form = document.getElementById('houseworkForm');
@@ -10798,8 +10784,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       form.reset();
       houseworkEditingWeekdays = [];
-      hwSyncMemberSelect();
-      hwRenderRoomOptions();
 
       if (taskId) {
         const task = houseworkData.tasks.find(t => t.id === taskId);
@@ -10808,11 +10792,8 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         document.getElementById('houseworkId').value = task.id;
         document.getElementById('houseworkTitle').value = task.title || '';
         document.getElementById('houseworkDescription').value = task.description || '';
-        document.getElementById('houseworkRoom').value = task.room || '';
+        document.getElementById('houseworkRoom').value = HW_ROOM_NAMES.includes((task.room || '').trim()) ? task.room.trim() : '';
         document.getElementById('houseworkCreatedAt').value = task.createdAt || hwLocalISO(new Date());
-
-        const memberSel = document.getElementById('houseworkMember');
-        if (memberSel) memberSel.value = task.memberId || (houseworkData.members[0] || {}).id || '';
 
         const due = hwGetDue(task);
         const dueInput = document.getElementById('houseworkDueDate');
@@ -10823,7 +10804,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
         const freq = (task.repeat && task.repeat.freq) ? task.repeat.freq : 'none';
         hwSelectChoice('repeat', freq);
-        if (presetRepeat && freq === 'none') hwSelectChoice('repeat', presetRepeat);
         if (freq === 'weekly') {
           houseworkEditingWeekdays = (task.repeat.weekdays || []).map(String);
           hwPaintWeekdays();
@@ -10836,16 +10816,12 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
           const el = document.getElementById('houseworkMonthday');
           if (el) el.value = task.repeat.monthday || 1;
         }
-        const rotate = document.getElementById('houseworkRotate');
-        if (rotate) rotate.checked = !!(task.repeat && task.repeat.rotate);
       } else {
         title.textContent = '添加家务';
         document.getElementById('houseworkId').value = '';
         document.getElementById('houseworkCreatedAt').value = hwLocalISO(new Date());
         const dueInput = document.getElementById('houseworkDueDate');
         if (dueInput) dueInput.value = hwLocalISO(new Date());
-        const memberSel = document.getElementById('houseworkMember');
-        if (memberSel) memberSel.value = (houseworkData.members[0] || {}).id || '';
         hwSelectChoice('type', 'cleaning');
         hwSelectChoice('priority', 'medium');
         hwSelectChoice('repeat', 'none');
@@ -10853,7 +10829,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       }
 
       hwSyncRepeatBoxes(document.getElementById('houseworkRepeat').value);
-      hwSyncRotateHint();
       hwRefreshDueDatePreview();
       modal.classList.remove('hidden');
     }
@@ -10865,7 +10840,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     // 【美化警告弹窗】替代原生 alert：红色警示图标 + 单按钮，风格与应用卡片一致
     function hwShowWarnDialog(message) {
       const overlay = document.createElement('div');
-      overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[70] flex items-center justify-center p-4';
+      overlay.className = 'hw-overlay fixed inset-0 bg-black bg-opacity-40 z-[70] flex items-center justify-center p-4';
       overlay.innerHTML = `
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 animate-slide-up text-center">
           <div class="w-14 h-14 mx-auto rounded-full bg-red-100 flex items-center justify-center mb-3">
@@ -10894,8 +10869,7 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
             freq,
             interval: freq === 'interval' ? Math.max(1, parseInt(document.getElementById('houseworkInterval').value, 10) || 1) : undefined,
             weekdays: freq === 'weekly' ? houseworkEditingWeekdays.slice().map(Number) : undefined,
-            monthday: freq === 'monthly' ? Math.min(31, Math.max(1, parseInt(document.getElementById('houseworkMonthday').value, 10) || 1)) : undefined,
-            rotate: freq !== 'none' ? !!document.getElementById('houseworkRotate').checked : false
+            monthday: freq === 'monthly' ? Math.min(31, Math.max(1, parseInt(document.getElementById('houseworkMonthday').value, 10) || 1)) : undefined
           };
       if (repeat.freq === 'weekly' && (!repeat.weekdays || !repeat.weekdays.length)) {
         repeat.weekdays = [new Date().getDay()];
@@ -10911,7 +10885,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         room: (document.getElementById('houseworkRoom').value || '').trim(),
         type: document.getElementById('houseworkType').value || 'other',
         priority: document.getElementById('houseworkPriority').value || 'medium',
-        memberId: document.getElementById('houseworkMember').value || '',
         repeat,
         createdAt: existing ? (existing.createdAt || hwLocalISO(new Date())) : hwLocalISO(new Date()),
         lastDoneAt: existing ? (existing.lastDoneAt || null) : null,
@@ -10972,31 +10945,28 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
     async function completeHousework(id) {
       const task = houseworkData.tasks.find(t => t.id === id);
       if (!task) return;
+      if (hwIsDoneToday(task)) return; // 防重复完成刷数据（撤销走 undo 入口）
 
       const now = new Date();
       const doneAt = hwLocalISO(now);
       const repeating = hwIsRepeating(task);
 
-      // 快照，便于保存失败时回滚
-      const snapshot = { lastDoneAt: task.lastDoneAt, completedAt: task.completedAt, dueDate: task.dueDate, status: task.status, doneCount: task.doneCount, memberId: task.memberId, lastDoneBy: task.lastDoneBy };
+      // 【撤销快照】记录完成前状态，再点一次可完整还原
+      const snapshot = { dueDate: task.dueDate, lastDoneAt: task.lastDoneAt || null, completedAt: task.completedAt || null, status: task.status, doneCount: task.doneCount || 0, doneAt };
 
-      // 【负责人固定】完成时先把「当时的负责人」记下来（lastDoneBy）：
-      // 周期任务若有轮值，完成会立即把负责人切给下一位，行尾头像仍应显示这次做的人
-      const doneBy = task.memberId || '';
-      houseworkData.history.push({ taskId: task.id, title: task.title, at: doneAt, memberId: doneBy });
+      houseworkData.history.push({ taskId: task.id, title: task.title, at: doneAt, memberId: task.memberId || '' });
       if (houseworkData.history.length > 3000) houseworkData.history = houseworkData.history.slice(-3000);
 
+      task._prev = snapshot;
       task.lastDoneAt = doneAt;
-      task.lastDoneBy = doneBy;
-      task.doneCount = (task.doneCount || 0) + 1;
+      task.doneCount = snapshot.doneCount + 1;
 
       if (repeating) {
-        // 周期任务：推进到下一个周期，永远不「结束」
-        const next = hwNextDue(task, now);
+        // 周期任务：从原定到期日推进到下一周期（锚定不漂移），永远不「结束」
+        const next = hwAdvanceDue(task, now);
         if (next) task.dueDate = hwLocalISO(next).replace('T', ' ');
         task.status = 'pending';
         task.completedAt = null;
-        if (task.repeat.rotate) hwRotateMember(task);
       } else {
         task.status = 'completed';
         task.completedAt = doneAt;
@@ -11004,7 +10974,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
 
       const saved = await saveHouseworkData();
       if (!saved) {
-        Object.assign(task, snapshot);
+        task.dueDate = snapshot.dueDate; task.lastDoneAt = snapshot.lastDoneAt;
+        task.completedAt = snapshot.completedAt; task.status = snapshot.status; task.doneCount = snapshot.doneCount;
+        delete task._prev;
         houseworkData.history.pop();
         await loadHouseworkData();
         hwRenderAll();
@@ -11018,20 +10990,54 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       AppHelper.showNotification('完成', `${task.title} —— ${phrase}`, 'success');
     }
 
-    // 轮值：把负责人交给下一位成员
-    function hwRotateMember(task) {
-      const members = houseworkData.members;
-      if (members.length < 2) return;
-      const idx = members.findIndex(m => m.id === task.memberId);
-      const next = members[(idx + 1) % members.length];
-      task.memberId = next.id;
+    // 【撤销完成】误点勾选再点一次即可撤回：还原快照 + 移除那条完成记录
+    async function undoHouseworkComplete(id) {
+      const task = houseworkData.tasks.find(t => t.id === id);
+      if (!task || !hwIsDoneToday(task)) return;
+
+      const p = task._prev;
+      const doneAt = (p && p.doneAt) || task.lastDoneAt || task.completedAt;
+
+      if (p) {
+        task.dueDate = p.dueDate;
+        task.lastDoneAt = p.lastDoneAt;
+        task.completedAt = p.completedAt;
+        task.status = p.status;
+        task.doneCount = p.doneCount;
+      } else {
+        // 重构前完成的旧数据（无快照）：保守还原
+        task.lastDoneAt = null;
+        task.completedAt = null;
+        task.status = 'pending';
+        task.doneCount = Math.max(0, (task.doneCount || 0) - 1);
+      }
+      delete task._prev;
+
+      // 精确移除本次完成写入的那条历史
+      for (let i = houseworkData.history.length - 1; i >= 0; i--) {
+        if (houseworkData.history[i].taskId === id && houseworkData.history[i].at === doneAt) {
+          houseworkData.history.splice(i, 1);
+          break;
+        }
+      }
+
+      const saved = await saveHouseworkData();
+      if (!saved) {
+        await loadHouseworkData();
+        hwRenderAll();
+        AppHelper.showNotification('操作失败', '云端写入未成功，请检查网络后重试。', 'error');
+        return;
+      }
+      hwRenderAll();
+      AppHelper.showNotification('已撤销', `${task.title} 回到待办`, 'success');
     }
 
     async function snoozeHousework(id, days = 1) {
       const task = houseworkData.tasks.find(t => t.id === id);
       if (!task) return;
 
-      const base = hwGetDue(task) && hwGetDue(task) > new Date() ? hwGetDue(task) : new Date();
+      const due = hwGetDue(task);
+      const base = due && due > new Date() ? due : new Date();
       const next = new Date(base.getTime());
       next.setDate(next.getDate() + days);
       next.setHours(23, 59, 0, 0);
@@ -11047,20 +11053,19 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
         return;
       }
       hwRenderAll();
-      AppHelper.showNotification('已推迟', `${task.title} 推迟到明天`, 'success');
+      // 文案按真实新到期日，不再写死「明天」
+      AppHelper.showNotification('已推迟', `${task.title} 推迟到 ${hwDueShort(next)}`, 'success');
     }
 
-    // 跳过这一次：不计入完成，也不视为失败，直接顺延到下一个周期
+    // 跳过这一次：不计入完成，也不视为失败，直接顺延到下一个周期（仅周期任务提供此操作）
     async function skipHousework(id) {
       const task = houseworkData.tasks.find(t => t.id === id);
       if (!task) return;
 
       const previous = task.dueDate;
       if (hwIsRepeating(task)) {
-        const next = hwNextDue(task, new Date());
+        const next = hwAdvanceDue(task, new Date());
         if (next) task.dueDate = hwLocalISO(next).replace('T', ' ');
-      } else {
-        task.dueDate = hwLocalISO(hwEndOfToday()).replace('T', ' ');
       }
 
       const saved = await saveHouseworkData();
@@ -11082,117 +11087,31 @@ CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(data_key);
       const ok = await hwConfirm(`确定要删除「${task.title}」吗？删除后无法恢复。`);
       if (!ok) return;
 
-      const backup = houseworkData.tasks.slice();
+      const backupTasks = houseworkData.tasks.slice();
+      const backupHistory = houseworkData.history.slice();
       houseworkData.tasks = houseworkData.tasks.filter(t => t.id !== id);
+      // 同步清掉该家务的历史记录，不留孤儿数据
+      houseworkData.history = houseworkData.history.filter(h => h.taskId !== id);
 
       const saved = await saveHouseworkData();
       if (!saved) {
-        houseworkData.tasks = backup;
+        houseworkData.tasks = backupTasks;
+        houseworkData.history = backupHistory;
         await loadHouseworkData();
         hwRenderAll();
         AppHelper.showNotification('删除失败', '云端写入未成功，该家务已恢复。请检查网络后重试。', 'error');
         return;
       }
+      if (hwRoomFilter && !houseworkData.tasks.some(t => hwRoomGroup(t) === hwRoomFilter)) hwRoomFilter = '';
       hwRenderAll();
       AppHelper.showNotification('已删除', `${task.title} 已从清单移除`, 'success');
-    }
-
-    // 家庭成员管理
-    function hwOpenMemberDialog() {
-      const overlay = document.createElement('div');
-      overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[60] flex items-center justify-center p-4';
-      document.body.appendChild(overlay);
-
-      const paint = () => {
-        overlay.innerHTML = `
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-slide-up">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-bold text-gray-800">家庭成员</h3>
-              <span class="text-xs text-gray-400">用于分工与统计</span>
-            </div>
-            <div class="space-y-2 mb-4 max-h-64 overflow-y-auto">
-              ${houseworkData.members.map(m => `
-                <div class="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50">
-                  ${hwMemberBadge(m)}
-                  <span class="flex-1 text-sm text-gray-700 truncate">${esc(m.name)}</span>
-                  <button type="button" class="w-7 h-7 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" data-hw-del-member="${esc(m.id)}" title="移除">
-                    <i class="fa fa-times text-sm"></i>
-                  </button>
-                </div>`).join('')}
-            </div>
-            <div class="flex gap-2">
-              <input type="text" id="hwNewMemberName" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm" placeholder="输入成员名字，回车添加">
-              <button type="button" id="hwAddMemberBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium transition-colors">添加</button>
-            </div>
-            <div class="flex justify-end mt-5 pt-4 border-t border-gray-100">
-              <button type="button" id="hwMemberDone" class="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors">完成</button>
-            </div>
-          </div>`;
-      };
-      paint();
-
-      const finish = async () => {
-        overlay.remove();
-        const saved = await saveHouseworkData();
-        if (!saved) {
-          await loadHouseworkData();
-          AppHelper.showNotification('保存失败', '成员变更未写入云端，请检查网络后重试。', 'error');
-        }
-        hwRenderAll();
-      };
-
-      const addMember = () => {
-        const input = overlay.querySelector('#hwNewMemberName');
-        const name = (input ? input.value : '').trim();
-        if (!name) return;
-        if (name.length > 12) {
-          AppHelper.showNotification('名字太长', '成员名字请控制在 12 个字以内', 'warning');
-          return;
-        }
-        if (houseworkData.members.some(m => m.name === name)) {
-          AppHelper.showNotification('已存在', `成员「${name}」已经在列表里了`, 'warning');
-          return;
-        }
-        houseworkData.members.push({ id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name });
-        paint();
-        const next = overlay.querySelector('#hwNewMemberName');
-        if (next) next.focus();
-      };
-
-      overlay.addEventListener('click', ev => {
-        if (ev.target === overlay) { finish(); return; }
-        const delBtn = ev.target.closest('[data-hw-del-member]');
-        if (delBtn) {
-          if (houseworkData.members.length <= 1) {
-            AppHelper.showNotification('无法移除', '至少要保留一位家庭成员', 'warning');
-            return;
-          }
-          const id = delBtn.dataset.hwDelMember;
-          houseworkData.members = houseworkData.members.filter(m => m.id !== id);
-          houseworkData.tasks.forEach(t => { if (t.memberId === id) t.memberId = ''; });
-          paint();
-          return;
-        }
-        if (ev.target.closest('#hwAddMemberBtn')) { addMember(); return; }
-        if (ev.target.closest('#hwMemberDone')) finish();
-      });
-
-      overlay.addEventListener('keydown', ev => {
-        if (ev.key === 'Enter' && ev.target && ev.target.id === 'hwNewMemberName') {
-          ev.preventDefault();
-          addMember();
-        }
-      });
-
-      const first = overlay.querySelector('#hwNewMemberName');
-      if (first) first.focus();
     }
 
     // 站内确认框（避免原生 confirm 的中断感）
     function hwConfirm(message) {
       return new Promise(resolve => {
         const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[60] flex items-center justify-center p-4';
+        overlay.className = 'hw-overlay fixed inset-0 bg-black bg-opacity-40 z-[60] flex items-center justify-center p-4';
         overlay.innerHTML = `
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-slide-up">
             <div class="flex items-start gap-3 mb-5">
